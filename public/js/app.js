@@ -238,13 +238,7 @@ function setupAuthenticatedState() {
   document.getElementById('setting-supabase-url').value = storedUrl;
   document.getElementById('setting-supabase-key').value = storedKey;
 
-  const storedGoal = localStorage.getItem('rs_daily_goal') || '500.00';
-  const goalInput = document.getElementById('setting-daily-goal');
-  if (goalInput) {
-    goalInput.value = storedGoal;
-  }
-
-  const storedRechargesGoal = localStorage.getItem('rs_monthly_recharges_goal') || '1000';
+  const storedRechargesGoal = localStorage.getItem('rs_monthly_recharges_goal') || '5000.00';
   const rechargesGoalInput = document.getElementById('setting-monthly-recharges-goal');
   if (rechargesGoalInput) {
     rechargesGoalInput.value = storedRechargesGoal;
@@ -1715,21 +1709,18 @@ function clearLocalDatabase() {
 }
 
 function saveLocalSettings() {
-  const goalInput = document.getElementById('setting-daily-goal');
   const rechargesInput = document.getElementById('setting-monthly-recharges-goal');
   const simsInput = document.getElementById('setting-monthly-sims-goal');
 
-  if (goalInput && rechargesInput && simsInput) {
-    const goalVal = parseFloat(goalInput.value);
-    const rechargesVal = parseInt(rechargesInput.value, 10);
+  if (rechargesInput && simsInput) {
+    const rechargesVal = parseFloat(rechargesInput.value);
     const simsVal = parseInt(simsInput.value, 10);
 
-    if (isNaN(goalVal) || goalVal < 0 || isNaN(rechargesVal) || rechargesVal < 0 || isNaN(simsVal) || simsVal < 0) {
+    if (isNaN(rechargesVal) || rechargesVal < 0 || isNaN(simsVal) || simsVal < 0) {
       UI.showToast('Veuillez entrer des objectifs valides.', 'error');
       return;
     }
 
-    localStorage.setItem('rs_daily_goal', goalVal.toFixed(2));
     localStorage.setItem('rs_monthly_recharges_goal', rechargesVal.toString());
     localStorage.setItem('rs_monthly_sims_goal', simsVal.toString());
 

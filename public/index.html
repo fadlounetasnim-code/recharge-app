@@ -221,25 +221,12 @@
 
         <!-- Employee Specific Section (Hidden by default) -->
         <div id="employee-dashboard-widgets" style="display: none; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
-          <!-- Objectif du jour -->
-          <div class="glass-panel" style="padding: 20px; display: flex; flex-direction: column; justify-content: center;">
-            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;" data-i18n="lbl_daily_goal">Objectif Journalier</h3>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <span style="font-size: 0.85rem; color: var(--text-secondary);" data-i18n="lbl_progress_daily_net">Progrès du jour (Net)</span>
-              <strong id="seller-goal-text" style="font-size: 0.95rem; color: var(--success);">0.00 / 500.00 DH</strong>
-            </div>
-            <div style="width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; border: 1px solid var(--border-color);">
-              <div id="seller-goal-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); transition: width 0.4s ease;"></div>
-            </div>
-            <div id="seller-goal-status" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">Continuez ainsi !</div>
-          </div>
-
           <!-- Objectif Mensuel Recharges -->
           <div class="glass-panel" style="padding: 20px; display: flex; flex-direction: column; justify-content: center;">
             <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;" data-i18n="lbl_monthly_recharges_goal">Objectif Mensuel Recharges</h3>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <span style="font-size: 0.85rem; color: var(--text-secondary);" data-i18n="lbl_progress_month_recharges">Progrès du mois (Recharges)</span>
-              <strong id="seller-monthly-recharges-text" style="font-size: 0.95rem; color: var(--primary);">0 / 1000 Pcs</strong>
+              <strong id="seller-monthly-recharges-text" style="font-size: 0.95rem; color: var(--primary);">0.00 / 1000.00 DH</strong>
             </div>
             <div style="width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; border: 1px solid var(--border-color);">
               <div id="seller-monthly-recharges-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--info)); transition: width 0.4s ease;"></div>
@@ -776,12 +763,8 @@
         <div id="settings-goal-card" class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
           <h3 style="margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;" data-i18n="lbl_sales_goals_title">Objectifs de Vente</h3>
           <div class="form-group" style="margin-bottom:12px;">
-            <label class="label" data-i18n="lbl_setting_daily_goal">Objectif Journalier (DH)</label>
-            <input type="number" id="setting-daily-goal" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="500.00" min="0" step="any">
-          </div>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label class="label" data-i18n="lbl_setting_monthly_recharges_goal">Objectif Mensuel Recharges (Unités)</label>
-            <input type="number" id="setting-monthly-recharges-goal" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="1000" min="0" step="1">
+            <label class="label" data-i18n="lbl_setting_monthly_recharges_goal">Objectif Mensuel Recharges (DH)</label>
+            <input type="number" id="setting-monthly-recharges-goal" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="5000.00" min="0" step="any">
           </div>
           <div class="form-group" style="margin-bottom:20px;">
             <label class="label" data-i18n="lbl_setting_monthly_sims_goal">Objectif Mensuel SIM (Unités)</label>
