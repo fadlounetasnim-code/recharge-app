@@ -141,10 +141,18 @@ const Auth = (() => {
     return false;
   };
 
+  const updateProfile = (newProfile) => {
+    if (userProfile) {
+      userProfile = { ...userProfile, ...newProfile };
+      saveSessionToStorage();
+    }
+  };
+
   return {
     login,
     logout,
     checkSession,
+    updateProfile,
     isLoggedIn: () => !!userProfile,
     getCurrentUser: () => currentUser,
     getUserProfile: () => userProfile,

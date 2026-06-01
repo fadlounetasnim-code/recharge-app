@@ -25,9 +25,16 @@ CREATE TABLE public.team_members (
     is_active BOOLEAN NOT NULL DEFAULT true,
     assigned_sector TEXT,
     dealer_code TEXT,
+    monthly_recharges_goal NUMERIC NOT NULL DEFAULT 5000.00,
+    monthly_sims_goal INTEGER NOT NULL DEFAULT 100,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Note: To migrate an existing database on Supabase, run:
+-- ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS monthly_recharges_goal NUMERIC NOT NULL DEFAULT 5000.00;
+-- ALTER TABLE public.team_members ADD COLUMN IF NOT EXISTS monthly_sims_goal INTEGER NOT NULL DEFAULT 100;
+
 
 -- 2. Create User Roles Table
 CREATE TABLE public.user_roles (

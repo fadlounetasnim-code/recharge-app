@@ -270,6 +270,36 @@ function setupAuthenticatedState() {
   navigateTo('dashboard');
   
   if (loader) loader.style.display = 'none';
+
+  // Refresh user profile asynchronously from Supabase to fetch any updated objectives/metadata
+  refreshUserProfile();
+}
+
+async function refreshUserProfile() {
+  const profile = Auth.getUserProfile();
+  if (profile && DB.getUseSupabase()) {
+    try {
+      const client = DB.getSupabaseClient();
+      const { data, error } = await client
+        .from('team_members')
+        .select('*')
+        .eq('id', profile.id)
+        .single();
+      
+      if (!error && data) {
+        Auth.updateProfile(data);
+        const headerUsername = document.getElementById('header-username');
+        if (headerUsername) headerUsername.textContent = data.full_name;
+        // Re-init dashboard if active to load the fresh goals
+        const activeNav = document.querySelector('.sidebar .active, [data-nav="dashboard"].active');
+        if (activeNav && activeNav.getAttribute('data-nav') === 'dashboard') {
+          UI.initDashboard();
+        }
+      }
+    } catch (e) {
+      console.warn('Could not refresh user profile from Supabase:', e);
+    }
+  }
 }
 
 // Trigger Logout session
@@ -1835,6 +1865,11 @@ async function saveSellersObjectives() {
 
         localStorage.setItem('rs_goal_recharges_' + member.id, rechargesVal.toString());
         localStorage.setItem('rs_goal_sims_' + member.id, simsVal.toString());
+
+        await DB.updateTeamMember(member.id, {
+          monthly_recharges_goal: rechargesVal,
+          monthly_sims_goal: simsVal
+        });
       }
     }
 

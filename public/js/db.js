@@ -55,7 +55,7 @@ const DB = (() => {
       const defaultTeam = [
         { id: 'admin-id', full_name: 'Super Admin', email: 'admin@recharge.com', role: 'admin', is_active: true, phone: '0600000000', assigned_sector: 'National', dealer_code: 'D-ADMIN' },
         { id: 'sup-id', full_name: 'Supervisor Test', email: 'supervisor@recharge.com', role: 'supervisor', is_active: true, phone: '0611111111', assigned_sector: 'Casa-Anfa', dealer_code: 'D-SUP01' },
-        { id: 'emp-id', full_name: 'Employee Test', email: 'employee@recharge.com', role: 'employee', is_active: true, phone: '0622222222', assigned_sector: 'Maarif', dealer_code: 'D-EMP01' }
+        { id: 'emp-id', full_name: 'Employee Test', email: 'employee@recharge.com', role: 'employee', is_active: true, phone: '0622222222', assigned_sector: 'Maarif', dealer_code: 'D-EMP01', monthly_recharges_goal: 5000.00, monthly_sims_goal: 100 }
       ];
       setLocalData('team_members', defaultTeam);
     }
