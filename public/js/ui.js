@@ -597,7 +597,7 @@ const UI = (() => {
           const todaySales = filteredSales.filter(s => getLocalDateStr(s.created_at) === todayStr);
           const todayNet = todaySales.reduce((sum, s) => sum + (Number(s.net_total) || 0), 0);
           
-          const target = 500.00;
+          const target = parseFloat(localStorage.getItem('rs_daily_goal')) || 500.00;
           const pct = Math.min(100, (todayNet / target) * 100);
           document.getElementById('seller-goal-text').textContent = `${todayNet.toFixed(2)} / ${target.toFixed(2)} DH`;
           document.getElementById('seller-goal-bar').style.width = `${pct}%`;

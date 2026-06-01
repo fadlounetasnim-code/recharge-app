@@ -747,6 +747,15 @@
           <button class="btn btn-primary" onclick="saveSettings()" data-i18n="btn_save_settings">Enregistrer & Recharger</button>
         </div>
 
+        <div class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
+          <h3 style="margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">Objectif de Vente</h3>
+          <div class="form-group" style="margin-bottom:20px;">
+            <label class="label">Objectif Journalier (DH)</label>
+            <input type="number" id="setting-daily-goal" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="500.00" min="0" step="any">
+          </div>
+          <button class="btn btn-primary" onclick="saveLocalSettings()">Enregistrer l'objectif</button>
+        </div>
+
         <div class="glass-panel" style="max-width: 600px;">
           <h3 data-i18n="settings_demo_mode" style="margin-bottom:12px;">Mode Offline / Démo local</h3>
           <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;" data-i18n="settings_demo_desc">

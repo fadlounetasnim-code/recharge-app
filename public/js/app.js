@@ -234,6 +234,12 @@ function setupAuthenticatedState() {
   document.getElementById('setting-supabase-url').value = storedUrl;
   document.getElementById('setting-supabase-key').value = storedKey;
 
+  const storedGoal = localStorage.getItem('rs_daily_goal') || '500.00';
+  const goalInput = document.getElementById('setting-daily-goal');
+  if (goalInput) {
+    goalInput.value = storedGoal;
+  }
+
   // Render dashboard elements
   navigateTo('dashboard');
   
@@ -1681,6 +1687,21 @@ function clearLocalDatabase() {
   }
 }
 
+function saveLocalSettings() {
+  const goalInput = document.getElementById('setting-daily-goal');
+  if (goalInput) {
+    const goalVal = parseFloat(goalInput.value);
+    if (!isNaN(goalVal) && goalVal >= 0) {
+      localStorage.setItem('rs_daily_goal', goalVal.toFixed(2));
+      UI.showToast('Objectif sauvegardé avec succès !', 'success');
+      // Refresh dashboard if active to apply new goal
+      UI.initDashboard();
+    } else {
+      UI.showToast('Veuillez entrer un objectif valide.', 'error');
+    }
+  }
+}
+
 // --- Local filters helpers ---
 function filterClientsTable() {
   const query = document.getElementById('client-search').value.toLowerCase();
@@ -1779,6 +1800,7 @@ window.exportReportPDF = exportReportPDF;
 window.exportReportCSV = exportReportCSV;
 window.exportSalesCSV = exportSalesCSV;
 window.saveSettings = saveSettings;
+window.saveLocalSettings = saveLocalSettings;
 window.clearLocalDatabase = clearLocalDatabase;
 window.filterClientsTable = filterClientsTable;
 window.filterSalesTable = filterSalesTable;
