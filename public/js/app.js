@@ -240,6 +240,17 @@ function setupAuthenticatedState() {
     goalInput.value = storedGoal;
   }
 
+  // Show/Hide settings cards based on role (hide sensitive panels for employees/vendeurs)
+  const isEmployee = role === 'employee';
+  const supabaseCard = document.getElementById('settings-supabase-card');
+  if (supabaseCard) {
+    supabaseCard.style.display = isEmployee ? 'none' : 'block';
+  }
+  const offlineCard = document.getElementById('settings-offline-card');
+  if (offlineCard) {
+    offlineCard.style.display = isEmployee ? 'none' : 'block';
+  }
+
   // Render dashboard elements
   navigateTo('dashboard');
   

@@ -734,7 +734,7 @@
           </div>
         </div>
 
-        <div class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
+        <div id="settings-supabase-card" class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
           <h3 data-i18n="settings_supabase_title" style="margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">Identifiants Supabase</h3>
           <div class="form-group" style="margin-bottom:12px;">
             <label class="label">Supabase Project URL</label>
@@ -747,7 +747,7 @@
           <button class="btn btn-primary" onclick="saveSettings()" data-i18n="btn_save_settings">Enregistrer & Recharger</button>
         </div>
 
-        <div class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
+        <div id="settings-goal-card" class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
           <h3 style="margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">Objectif de Vente</h3>
           <div class="form-group" style="margin-bottom:20px;">
             <label class="label">Objectif Journalier (DH)</label>
@@ -756,7 +756,7 @@
           <button class="btn btn-primary" onclick="saveLocalSettings()">Enregistrer l'objectif</button>
         </div>
 
-        <div class="glass-panel" style="max-width: 600px;">
+        <div id="settings-offline-card" class="glass-panel" style="max-width: 600px;">
           <h3 data-i18n="settings_demo_mode" style="margin-bottom:12px;">Mode Offline / Démo local</h3>
           <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;" data-i18n="settings_demo_desc">
             Si aucun identifiant Supabase n'est fourni, l'application fonctionne en mode hors ligne en utilisant le stockage local du navigateur (LocalStorage).
