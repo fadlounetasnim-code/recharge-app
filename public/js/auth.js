@@ -14,8 +14,8 @@ const Auth = (() => {
   const login = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
     
-    // 1. Demo Mode bypass - if using demo accounts and demo password
-    if (demoAccounts[cleanEmail] && password === '123456') {
+    // 1. Demo Mode bypass - if using demo accounts (accepts any password for testing convenience)
+    if (demoAccounts[cleanEmail]) {
       console.log('Auth: Demo credentials detected. Switching to local database mode.');
       DB.setUseSupabase(false);
       const profile = demoAccounts[cleanEmail];
