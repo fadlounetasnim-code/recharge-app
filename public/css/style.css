@@ -359,6 +359,8 @@ html[dir="rtl"] .sidebar {
   grid-area: main;
   padding: 32px;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
   position: relative;
   background-color: var(--bg-primary);
 }
@@ -1170,6 +1172,38 @@ body:has(#view-auth.active) .app-container {
     font-size: 1.25rem;
   }
   
+  /* Header Mobile Overrides */
+  .global-header {
+    padding: 0 12px;
+  }
+  
+  .global-header .logo span {
+    display: none;
+  }
+  
+  .header-user {
+    gap: 4px;
+  }
+  
+  .header-user .username {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+  }
+  
+  .header-user .role-tag {
+    display: none;
+  }
+  
+  #connection-badge {
+    padding: 4px 6px;
+  }
+  
+  #connection-badge .badge-text {
+    display: none;
+  }
 }
 
 @media (max-width: 576px) {
