@@ -192,15 +192,13 @@ function setupAuthenticatedState() {
   roleTag.className = `role-tag ${role === 'admin' ? 'admin' : 'employee'}`;
 
   // Hide team links or admin settings if roles are employee
-  const teamLink = document.getElementById('nav-team-link');
-  if (teamLink) {
-    teamLink.style.display = role === 'employee' ? 'none' : 'flex';
-  }
+  document.querySelectorAll('[data-nav="team"]').forEach(el => {
+    el.style.display = role === 'employee' ? 'none' : 'flex';
+  });
 
-  const reportsLink = document.querySelector('[data-nav="reports"]');
-  if (reportsLink) {
-    reportsLink.style.display = role === 'employee' ? 'none' : 'flex';
-  }
+  document.querySelectorAll('[data-nav="reports"]').forEach(el => {
+    el.style.display = role === 'employee' ? 'none' : 'flex';
+  });
 
   const btnAdjustStock = document.getElementById('btn-adjust-stock-move');
   if (btnAdjustStock) {
@@ -2086,3 +2084,16 @@ async function handleCreditPaymentSubmit(e) {
     if (loader) loader.style.display = 'none';
   }
 }
+
+function openMobileMoreSheet() {
+  const sheet = document.getElementById('mobile-more-sheet');
+  if (sheet) sheet.style.display = 'block';
+}
+
+function closeMobileMoreSheet() {
+  const sheet = document.getElementById('mobile-more-sheet');
+  if (sheet) sheet.style.display = 'none';
+}
+
+window.openMobileMoreSheet = openMobileMoreSheet;
+window.closeMobileMoreSheet = closeMobileMoreSheet;
