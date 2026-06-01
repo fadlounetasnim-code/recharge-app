@@ -804,6 +804,13 @@
             <select id="sale-client-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
               <!-- populated by JS -->
             </select>
+            <div id="sale-client-info-box" style="display:none; margin-top: 10px; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--bg-primary); font-size: 0.85rem; line-height: 1.6; color: var(--text-primary);">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div><strong>Nom:</strong> <span id="sale-client-info-name"></span></div>
+                <div><strong>Téléphone:</strong> <span id="sale-client-info-phone"></span></div>
+                <div style="grid-column: span 2;"><strong>N° Dealer:</strong> <span id="sale-client-info-dealer"></span></div>
+              </div>
+            </div>
           </div>
 
           <!-- Dynamic Articles List -->

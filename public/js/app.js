@@ -137,7 +137,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         reader.readAsDataURL(file);
       }
-    });
+  }
+
+  const clientSelect = document.getElementById('sale-client-id');
+  if (clientSelect) {
+    clientSelect.addEventListener('change', updateSaleClientInfo);
   }
 });
 
@@ -235,6 +239,29 @@ async function triggerLogout() {
   UI.showToast('Déconnecté', 'success');
 }
 
+async function updateSaleClientInfo() {
+  const select = document.getElementById('sale-client-id');
+  const infoBox = document.getElementById('sale-client-info-box');
+  if (!select || !infoBox) return;
+
+  const clientId = select.value;
+  if (!clientId) {
+    infoBox.style.display = 'none';
+    return;
+  }
+
+  const clients = await DB.getClients();
+  const client = clients.find(c => c.id === clientId);
+  if (client) {
+    document.getElementById('sale-client-info-name').textContent = client.full_name || 'N/A';
+    document.getElementById('sale-client-info-phone').textContent = client.phone || 'N/A';
+    document.getElementById('sale-client-info-dealer').textContent = client.dealer_number || 'N/A';
+    infoBox.style.display = 'block';
+  } else {
+    infoBox.style.display = 'none';
+  }
+}
+
 // --- Nouvelle Vente Modal Handling ---
 // --- Multi-Item Sales Logic ---
 async function openSalesModal(preselectedClientId = null) {
@@ -268,6 +295,9 @@ async function openSalesModal(preselectedClientId = null) {
   if (preselectedClientId) {
     clientSelect.value = preselectedClientId;
   }
+
+  // Update client info card
+  await updateSaleClientInfo();
 
   // Add default first row
   addSaleItemRow();
