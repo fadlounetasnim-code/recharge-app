@@ -640,7 +640,9 @@ const UI = (() => {
           });
           
           // 1. Monthly Recharges Goal (DH)
-          const rechargesTarget = parseFloat(localStorage.getItem('rs_monthly_recharges_goal')) || 5000.00;
+          const rechargesTarget = parseFloat(localStorage.getItem('rs_goal_recharges_' + user.id)) || 
+                                  parseFloat(localStorage.getItem('rs_monthly_recharges_goal')) || 
+                                  5000.00;
           const pctRecharges = Math.min(100, (monthlyRechargesDH / rechargesTarget) * 100);
           document.getElementById('seller-monthly-recharges-text').textContent = `${monthlyRechargesDH.toFixed(2)} / ${rechargesTarget.toFixed(2)} DH`;
           document.getElementById('seller-monthly-recharges-bar').style.width = `${pctRecharges}%`;
@@ -649,7 +651,9 @@ const UI = (() => {
             : (isArabic ? `متبقي ${(rechargesTarget - monthlyRechargesDH).toFixed(2)} درهم لتحقيق الهدف` : `Encore ${(rechargesTarget - monthlyRechargesDH).toFixed(2)} DH pour atteindre l'objectif`);
 
           // 2. Monthly SIMs Goal (Pcs)
-          const simsTarget = parseInt(localStorage.getItem('rs_monthly_sims_goal'), 10) || 100;
+          const simsTarget = parseInt(localStorage.getItem('rs_goal_sims_' + user.id), 10) || 
+                             parseInt(localStorage.getItem('rs_monthly_sims_goal'), 10) || 
+                             100;
           const pctSims = Math.min(100, (monthlySimsVolume / simsTarget) * 100);
           document.getElementById('seller-monthly-sims-text').textContent = `${monthlySimsVolume} / ${simsTarget} Pcs`;
           document.getElementById('seller-monthly-sims-bar').style.width = `${pctSims}%`;

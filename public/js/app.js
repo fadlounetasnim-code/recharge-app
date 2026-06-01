@@ -232,6 +232,11 @@ function setupAuthenticatedState() {
     btnStockInvoice.style.display = 'flex';
   }
 
+  const btnManageObjectives = document.getElementById('btn-manage-objectives');
+  if (btnManageObjectives) {
+    btnManageObjectives.style.display = role === 'employee' ? 'none' : 'flex';
+  }
+
   // Load Settings input boxes
   const storedUrl = localStorage.getItem('supabase_url') || 'https://rzubtzpqdxanygzkquko.supabase.co';
   const storedKey = localStorage.getItem('supabase_key') || 'sb_publishable_GY2IDrcWN7G1cCaE_dThYg_RMwARiqp';
@@ -1766,6 +1771,82 @@ function filterSalesTable() {
   });
 }
 
+async function openObjectivesModal() {
+  const tableBody = document.getElementById('objectives-table-body');
+  if (!tableBody) return;
+  tableBody.innerHTML = '<tr><td colspan="3" class="text-center">Chargement...</td></tr>';
+  
+  // Show Modal
+  const modal = document.getElementById('manage-objectives-modal');
+  if (modal) modal.style.display = 'block';
+
+  try {
+    const team = await DB.getTeamMembers();
+    const employees = team.filter(member => member.role === 'employee');
+
+    if (employees.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="3" class="text-center" style="color:var(--text-muted);">Aucun vendeur trouvé.</td></tr>';
+      return;
+    }
+
+    tableBody.innerHTML = '';
+    employees.forEach(member => {
+      const storedRecharges = localStorage.getItem('rs_goal_recharges_' + member.id) || '5000.00';
+      const storedSims = localStorage.getItem('rs_goal_sims_' + member.id) || '100';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="padding: 12px 8px; vertical-align: middle;">
+          <strong>${member.full_name}</strong><br>
+          <span style="font-size: 0.75rem; color: var(--text-secondary);">${member.email}</span>
+        </td>
+        <td style="padding: 8px;">
+          <input type="number" id="obj-recharges-${member.id}" class="btn-outline" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" value="${storedRecharges}" min="0" step="any">
+        </td>
+        <td style="padding: 8px;">
+          <input type="number" id="obj-sims-${member.id}" class="btn-outline" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" value="${storedSims}" min="0" step="1">
+        </td>
+      `;
+      tableBody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error('Error loading seller objectives:', err);
+    tableBody.innerHTML = '<tr><td colspan="3" class="text-center" style="color:var(--crimson);">Erreur lors du chargement des vendeurs.</td></tr>';
+  }
+}
+
+async function saveSellersObjectives() {
+  try {
+    const team = await DB.getTeamMembers();
+    const employees = team.filter(member => member.role === 'employee');
+
+    for (const member of employees) {
+      const rechargesInput = document.getElementById(`obj-recharges-${member.id}`);
+      const simsInput = document.getElementById(`obj-sims-${member.id}`);
+
+      if (rechargesInput && simsInput) {
+        const rechargesVal = parseFloat(rechargesInput.value);
+        const simsVal = parseInt(simsInput.value, 10);
+
+        if (isNaN(rechargesVal) || rechargesVal < 0 || isNaN(simsVal) || simsVal < 0) {
+          UI.showToast('Veuillez entrer des objectifs valides pour tous les vendeurs.', 'error');
+          return;
+        }
+
+        localStorage.setItem('rs_goal_recharges_' + member.id, rechargesVal.toString());
+        localStorage.setItem('rs_goal_sims_' + member.id, simsVal.toString());
+      }
+    }
+
+    UI.showToast('Objectifs sauvegardés avec succès !', 'success');
+    closeActiveModal();
+    UI.initDashboard();
+  } catch (err) {
+    console.error('Error saving seller objectives:', err);
+    UI.showToast('Erreur lors de la sauvegarde.', 'error');
+  }
+}
+
 // Close active modal helper
 function closeActiveModal() {
   document.getElementById('modal-overlay').style.display = 'none';
@@ -1785,6 +1866,8 @@ function closeActiveModal() {
   if (editStockInvoiceModal) editStockInvoiceModal.style.display = 'none';
   const stockTransferModal = document.getElementById('stock-transfer-modal');
   if (stockTransferModal) stockTransferModal.style.display = 'none';
+  const manageObjectivesModal = document.getElementById('manage-objectives-modal');
+  if (manageObjectivesModal) manageObjectivesModal.style.display = 'none';
   const qrScannerModal = document.getElementById('qr-scanner-modal');
   if (qrScannerModal && qrScannerModal.style.display !== 'none') closeQRScanner();
   const clientQrModal = document.getElementById('client-qr-modal');
@@ -1818,6 +1901,8 @@ window.removeSaleItemRow = removeSaleItemRow;
 window.onSaleItemArticleChanged = onSaleItemArticleChanged;
 window.calculateSaleTotals = calculateSaleTotals;
 window.triggerLogout = triggerLogout;
+window.openObjectivesModal = openObjectivesModal;
+window.saveSellersObjectives = saveSellersObjectives;
 window.switchLanguage = (lang) => UI.switchLanguage(lang);
 window.toggleTheme = () => UI.toggleTheme();
 window.showReceipt = showReceipt;

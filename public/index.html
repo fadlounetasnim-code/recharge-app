@@ -514,7 +514,7 @@
             <h1 data-i18n="nav_stock">Gestion de Stock & Articles</h1>
             <p data-i18n="stock_subtitle" style="color: var(--text-secondary);">Inventaire des articles de recharges, cartes SIM et packs</p>
           </div>
-          <div class="view-actions" style="display:flex; gap:12px;">
+          <div class="view-actions" style="display:flex; gap:12px; flex-wrap: wrap;">
             <button class="btn btn-danger" onclick="openStockInvoiceModal()" id="btn-stock-invoice" style="background-color: var(--crimson); border-color: var(--crimson); font-weight:700; display:flex; align-items:center; gap:8px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               <span data-i18n="btn_stock_invoice">Entrée par Facture</span>
@@ -526,6 +526,10 @@
             <button class="btn btn-outline" onclick="openStockMovementModal()" id="btn-adjust-stock-move" style="display:flex; align-items:center; gap:8px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M12 5v14M5 12h14"/></svg>
               <span data-i18n="btn_adjust_stock">Ajustement Stock</span>
+            </button>
+            <button class="btn btn-outline" onclick="openObjectivesModal()" id="btn-manage-objectives" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>
+              <span>Objectifs Vendeurs</span>
             </button>
           </div>
         </div>
@@ -760,18 +764,6 @@
           <button class="btn btn-primary" onclick="saveSettings()" data-i18n="btn_save_settings">Enregistrer & Recharger</button>
         </div>
 
-        <div id="settings-goal-card" class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
-          <h3 style="margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;" data-i18n="lbl_sales_goals_title">Objectifs de Vente</h3>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label class="label" data-i18n="lbl_setting_monthly_recharges_goal">Objectif Mensuel Recharges (DH)</label>
-            <input type="number" id="setting-monthly-recharges-goal" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="5000.00" min="0" step="any">
-          </div>
-          <div class="form-group" style="margin-bottom:20px;">
-            <label class="label" data-i18n="lbl_setting_monthly_sims_goal">Objectif Mensuel SIM (Unités)</label>
-            <input type="number" id="setting-monthly-sims-goal" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="100" min="0" step="1">
-          </div>
-          <button class="btn btn-primary" onclick="saveLocalSettings()" data-i18n="btn_save_goals">Enregistrer les objectifs</button>
-        </div>
 
         <div id="settings-offline-card" class="glass-panel" style="max-width: 600px;">
           <h3 data-i18n="settings_demo_mode" style="margin-bottom:12px;">Mode Offline / Démo local</h3>
@@ -1167,6 +1159,36 @@
             <button type="submit" class="btn btn-primary" data-i18n="btn_save">Enregistrer</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANAGE OBJECTIVES MODAL -->
+  <div id="manage-objectives-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 650px; width: 90%;">
+      <div class="modal-header">
+        <h3>Objectifs Mensuels par Vendeur</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+          <table class="table" style="width: 100%;">
+            <thead>
+              <tr>
+                <th>Vendeur</th>
+                <th>Objectif Recharges (DH)</th>
+                <th>Objectif SIM (Pcs)</th>
+              </tr>
+            </thead>
+            <tbody id="objectives-table-body">
+              <!-- Populated dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:12px;">
+          <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+          <button type="button" class="btn btn-primary" onclick="saveSellersObjectives()">Enregistrer</button>
+        </div>
       </div>
     </div>
   </div>
