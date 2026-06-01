@@ -694,8 +694,19 @@ function openQRScanner() {
     const onScanSuccess = async (decodedText) => {
       closeQRScanner();
       
+      const cleanText = decodedText.trim().toLowerCase();
       const clients = await DB.getClients();
-      const client = clients.find(c => c.dealer_number === decodedText || c.id === decodedText);
+      
+      if (clients.length === 0) {
+        UI.showToast("Aucun client dans la base. Créez d'abord un client.", "error");
+        return;
+      }
+
+      const client = clients.find(c => 
+        (c.dealer_number && c.dealer_number.trim().toLowerCase() === cleanText) || 
+        (c.id && c.id.trim().toLowerCase() === cleanText)
+      );
+
       if (client) {
         navigateTo('sales');
         openSalesModal(client.id);
