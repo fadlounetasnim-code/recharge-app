@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recharge & SIM Manager</title>
+  <!-- SEO & Manifest -->
+  <meta name="description" content="Gestion complète des recharges et des ventes de cartes SIM pour les télécoms.">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Leaflet Maps CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <!-- CDN Dependencies -->
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- HTML5 QR Code Scanner -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode"></script>
+  <!-- QRCode Generator -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <!-- Leaflet Maps JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- jsPDF & html2pdf -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- SheetJS for Excel and CSV importing -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Toast Notification System -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Auth Wrapper View -->
+  <div id="auth-view" class="view active">
+    <div class="auth-card glass-panel" style="max-width: 420px; margin: 80px auto; padding: 32px;">
+      <div class="auth-header" style="text-align: center; margin-bottom: 24px;">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 12px; color: var(--primary);">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <h2 data-i18n="login_title">Recharge & SIM Manager</h2>
+        <p data-i18n="login_subtitle" style="color: var(--text-secondary); font-size: 0.9rem;">Système de gestion et de vente de recharges</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label class="label" data-i18n="login_email_label">Adresse E-mail</label>
+          <input type="email" id="login-email" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required placeholder="employee@recharge.com">
+        </div>
+        <div class="form-group" style="margin-bottom: 24px;">
+          <label class="label" data-i18n="login_password_label">Mot de passe</label>
+          <input type="password" id="login-password" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required placeholder="••••••">
+        </div>
+        <button type="submit" class="btn btn-primary btn-full-width" data-i18n="login_btn" style="width:100%; justify-content:center; padding:12px;">Se connecter</button>
+      </form>
+
+      <div class="auth-footer-credit" style="margin-top: 24px; text-align: center; font-size: 0.75rem; color: var(--text-muted);">
+        by Ayoub
+      </div>
+    </div>
+  </div>
+
+  <!-- App Wrapper View (Hidden by default) -->
+  <div id="app-view" class="app-container" style="display:none;">
+    
+    <!-- Top Global Header -->
+    <header class="global-header">
+      <div class="header-left">
+        <div class="logo">
+          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span data-i18n="app_title">Recharge & SIM Manager</span>
+        </div>
+        <span id="connection-badge" class="badge badge-success">
+          <span class="dot"></span>
+          <span class="badge-text" data-i18n="status_online">En ligne</span>
+        </span>
+      </div>
+      
+      <div class="header-right">
+        <!-- Language Selector -->
+        <div class="language-selector">
+          <button id="lang-fr" class="lang-btn active" onclick="switchLanguage('fr')">FR</button>
+          <button id="lang-ar" class="lang-btn" onclick="switchLanguage('ar')">AR</button>
+        </div>
+
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" class="icon-button" onclick="toggleTheme()">
+          <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 5a7 7 0 000 14 7 7 0 000-14z"/>
+          </svg>
+        </button>
+
+        <!-- User profile details -->
+        <div class="header-user">
+          <span id="header-username" class="username">User</span>
+          <span id="header-user-role" class="role-tag employee">Badge</span>
+          <button class="icon-button" onclick="triggerLogout()" style="margin-left: 8px;" title="Se déconnecter">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px; color:var(--crimson);">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-nav">
+        <a href="#" class="nav-item active" data-nav="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span data-i18n="nav_dashboard">Tableau de bord</span>
+        </a>
+        <a href="#" class="nav-item" data-nav="clients">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span data-i18n="nav_clients">Clients</span>
+        </a>
+        <a href="#" class="nav-item" data-nav="sales">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          <span data-i18n="nav_sales">Ventes</span>
+        </a>
+        <a href="#" class="nav-item" data-nav="credits">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span data-i18n="nav_credits">Crédits Clients</span>
+        </a>
+        <a href="#" class="nav-item" data-nav="stock">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          <span data-i18n="nav_stock">Stock / Articles</span>
+        </a>
+        <a href="#" class="nav-item" data-nav="team" id="nav-team-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span data-i18n="nav_team">Équipe</span>
+        </a>
+        <a href="#" class="nav-item" data-nav="reports">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          <span data-i18n="nav_reports">Rapports</span>
+        </a>
+        <a href="#" class="nav-item" data-nav="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span data-i18n="nav_settings">Configuration</span>
+        </a>
+      </div>
+      
+      <div class="sidebar-footer" style="color:var(--text-muted); font-size:0.75rem; text-align:center;">
+        v1.2.0 &bull; Supabase Database
+      </div>
+    </aside>
+
+    <!-- Main Content Panel -->
+    <main class="main-content">
+      
+      <!-- DASHBOARD VIEW -->
+      <section id="view-dashboard" class="view active">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_dashboard">Tableau de bord</h1>
+            <p data-i18n="dashboard_subtitle" style="color: var(--text-secondary);">Aperçu de l'activité commerciale en temps réel</p>
+          </div>
+          <div class="view-actions" style="display:flex; gap:12px;">
+            <select id="dashboard-filter-vendeur" class="btn-outline" style="padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); display: none;" onchange="UI.initDashboard()">
+              <option value="all" data-i18n="opt_all_agents">Tous les agents</option>
+            </select>
+            <button class="btn btn-outline" onclick="openQRScanner()" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="15" x2="15" y2="15"></line><line x1="9" y1="9" x2="9" y2="15"></line><line x1="15" y1="9" x2="15" y2="15"></line></svg>
+              <span>Scanner QR</span>
+            </button>
+            <!-- Nouvelle Vente Primary Red Button -->
+            <button class="btn btn-danger" onclick="openSalesModal()" style="background-color: var(--crimson); border-color: var(--crimson); font-weight:700; display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span data-i18n="btn_new_sale">Nouvelle Vente</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-indigo-light text-indigo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="kpi_gross_sales">Ventes Brutes</h3>
+              <div id="kpi-gross-sales" class="metric-value">0.00 DH</div>
+            </div>
+          </div>
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-success-light text-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="kpi_net_sales">Chiffre d'Affaires Net</h3>
+              <div id="kpi-net-sales" class="metric-value">0.00 DH</div>
+            </div>
+          </div>
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-amber-light text-amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="kpi_recharges">Volume Recharges</h3>
+              <div id="kpi-recharges" class="metric-value">0 Pcs</div>
+            </div>
+          </div>
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-crimson-light text-crimson">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="kpi_sims">Cartes SIM & Packs</h3>
+              <div id="kpi-sims" class="metric-value">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Employee Specific Section (Hidden by default) -->
+        <div id="employee-dashboard-widgets" style="display: none; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+          <!-- Objectif du jour -->
+          <div class="glass-panel" style="padding: 20px; display: flex; flex-direction: column; justify-content: center;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;" data-i18n="lbl_daily_goal">Objectif Journalier</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 0.85rem; color: var(--text-secondary);">Progrès du jour (Net)</span>
+              <strong id="seller-goal-text" style="font-size: 0.95rem; color: var(--success);">0.00 / 500.00 DH</strong>
+            </div>
+            <div style="width: 100%; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; border: 1px solid var(--border-color);">
+              <div id="seller-goal-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); transition: width 0.4s ease;"></div>
+            </div>
+            <div id="seller-goal-status" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">Continuez ainsi !</div>
+          </div>
+          
+          <!-- Mon Stock Rapide -->
+          <div class="glass-panel" style="padding: 16px;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 10px;" data-i18n="lbl_quick_my_stock">Mon Inventaire Rapide</h3>
+            <div class="table-responsive" style="max-height: 120px; overflow-y: auto;">
+              <table class="table" style="font-size: 0.8rem; margin-bottom: 0;">
+                <thead>
+                  <tr>
+                    <th style="padding: 4px 8px;">Article</th>
+                    <th style="padding: 4px 8px;" class="text-right">Stock</th>
+                  </tr>
+                </thead>
+                <tbody id="seller-quick-stock-body">
+                  <!-- populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Row: Map & Calendar -->
+        <div class="dashboard-grid" style="margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: stretch;">
+          <!-- Map -->
+          <div class="glass-panel" style="display: flex; flex-direction: column; padding: 16px; height: 100%;">
+            <div class="panel-header" style="margin-bottom: 8px; flex-shrink: 0;">
+              <h3 style="font-size:1rem; font-weight:600;">Localisation des Clients (Cartographie)</h3>
+            </div>
+            <div id="clients-map" style="flex: 1; min-height: 250px; border-radius: var(--radius-md); margin-top: 8px; z-index: 1;"></div>
+          </div>
+          
+          <!-- Calendar -->
+          <div class="glass-panel" style="display: flex; flex-direction: column; padding: 16px; height: 100%;">
+            <div class="panel-header" style="margin-bottom: 8px; flex-shrink: 0;">
+              <h3 style="font-size:1rem; font-weight:600;">Calendrier d'Activité</h3>
+            </div>
+            <div class="calendar-wrapper" style="margin-top: 8px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 12px;">
+              <div class="calendar-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-shrink: 0;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="changeCalendarMonth(-1)" style="padding: 2px 6px; font-size: 0.75rem;">&larr;</button>
+                <strong id="calendar-month-year" style="color:var(--text-primary); font-size: 0.95rem;">--</strong>
+                <button type="button" class="btn btn-outline btn-sm" onclick="changeCalendarMonth(1)" style="padding: 2px 6px; font-size: 0.75rem;">&rarr;</button>
+              </div>
+              <div class="calendar-weekdays" style="display:grid; grid-template-columns:repeat(7, 1fr); text-align:center; font-size:0.75rem; color:var(--text-muted); font-weight:600; margin-bottom:8px; flex-shrink: 0;">
+                <span>Lu</span><span>Ma</span><span>Me</span><span>Je</span><span>Ve</span><span>Sa</span><span>Di</span>
+              </div>
+              <div id="calendar-days-grid" style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; text-align:center; flex: 1;">
+                <!-- JS populated -->
+              </div>
+            </div>
+
+            <!-- Selected Day Summary Panel -->
+            <div id="calendar-day-summary" style="margin-top: auto; padding: 12px; border-radius: var(--radius-md); background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 700; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 6px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
+                <span id="summary-date-label">Date: --/--/----</span>
+                <span id="summary-activity-badge" style="color: var(--success); font-size: 0.75rem; display: none;">★ Activité</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-secondary);" data-i18n="summary_clients">Clients vus :</span>
+                <strong id="summary-clients-count" style="color: var(--text-primary);">0</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-secondary);" data-i18n="summary_recharges">Recharges vendues :</span>
+                <strong id="summary-recharges-count" style="color: var(--text-primary);">0 Pcs</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text-secondary);" data-i18n="summary_sims">SIMs vendues :</span>
+                <strong id="summary-sims-count" style="color: var(--text-primary);">0 Pcs</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Grid with Chart & Recent Table -->
+        <div class="dashboard-grid" style="margin-top: 24px;">
+          <div class="glass-panel" style="grid-column: span 2;">
+            <div class="panel-header">
+              <h3 data-i18n="chart_sales_title">Évolution journalière des ventes (Net & Remises)</h3>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="sales-trend-chart"></canvas>
+            </div>
+          </div>
+          
+          <div class="glass-panel" style="grid-column: span 2;">
+            <div class="panel-header">
+              <h3 data-i18n="recent_sales_title">Dernières ventes enregistrées</h3>
+              <button class="btn btn-outline btn-sm" onclick="navigateTo('sales')" data-i18n="btn_view_all">Voir tout</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th data-i18n="th_date">Date</th>
+                    <th data-i18n="th_client">Client</th>
+                    <th data-i18n="th_article">Article</th>
+                    <th data-i18n="th_quantity">Quantité</th>
+                    <th data-i18n="th_gross_total">Total Brut</th>
+                    <th data-i18n="th_discount">Remise</th>
+                    <th data-i18n="th_net_total">Net à Payer</th>
+                    <th data-i18n="th_payment">Paiement</th>
+                    <th data-i18n="th_actions" class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboard-recent-sales-body">
+                  <!-- JS dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CLIENTS VIEW -->
+      <section id="view-clients" class="view">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_clients">Gestion des Clients</h1>
+            <p data-i18n="clients_subtitle" style="color: var(--text-secondary);">Ajouter, rechercher et gérer le portefeuille client</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-outline" onclick="triggerClientImport()" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <span data-i18n="btn_import_excel">Importer Excel / CSV</span>
+            </button>
+            <input type="file" id="client-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleClientImport(event)">
+            
+            <button class="btn btn-primary" onclick="openClientModal()" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span data-i18n="btn_new_client">Ajouter Client</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="filter-panel" style="margin-bottom: 20px; display:flex; gap:12px; align-items:center;">
+            <input type="text" id="client-search" class="btn-outline" style="flex:1; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Rechercher par nom, téléphone, code dealer..." oninput="filterClientsTable()">
+            <button class="btn btn-outline" onclick="openQRScanner()" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="15" x2="15" y2="15"></line><line x1="9" y1="9" x2="9" y2="15"></line><line x1="15" y1="9" x2="15" y2="15"></line></svg>
+              <span>Scanner QR</span>
+            </button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_fullname">Nom Complet</th>
+                  <th data-i18n="th_phone">Téléphone</th>
+                  <th data-i18n="th_dealer_number">Numéro Dealer</th>
+                  <th data-i18n="th_activity_type">Type d'activité</th>
+                  <th data-i18n="th_address">Adresse</th>
+                  <th>GPS (X, Y)</th>
+                  <th>QR Code</th>
+                  <th data-i18n="th_notes">Notes</th>
+                  <th data-i18n="th_actions" class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="clients-table-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SALES VIEW -->
+      <section id="view-sales" class="view">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_sales">Registre des ventes</h1>
+            <p data-i18n="sales_subtitle" style="color: var(--text-secondary);">Liste globale de toutes les transactions et facturations</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-outline" onclick="exportSalesCSV()" data-i18n="btn_export_csv">Exporter CSV</button>
+            <button class="btn btn-danger" onclick="openSalesModal()" style="background-color: var(--crimson); border-color: var(--crimson); font-weight:700;" data-i18n="btn_new_sale">Nouvelle Vente</button>
+          </div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="filter-panel" style="margin-bottom: 20px; display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+            <input type="text" id="sales-search" class="btn-outline" style="padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Rechercher par client, notes..." oninput="filterSalesTable()">
+            <select id="sales-filter-payment" class="btn-outline" style="padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="filterSalesTable()">
+              <option value="all" data-i18n="opt_all_payments">Tous les statuts de paiement</option>
+              <option value="paid" data-i18n="opt_paid">Payé</option>
+              <option value="unpaid" data-i18n="opt_unpaid">Non payé</option>
+              <option value="partial" data-i18n="opt_partial">Partiel</option>
+            </select>
+            <select id="sales-filter-category" class="btn-outline" style="padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="filterSalesTable()">
+              <option value="all" data-i18n="opt_all_categories">Toutes les catégories</option>
+              <option value="recharge" data-i18n="opt_recharge">Recharge</option>
+              <option value="sim" data-i18n="opt_sim">Carte SIM</option>
+              <option value="pack_sim" data-i18n="opt_pack_sim">Pack SIM</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_date">Date</th>
+                  <th data-i18n="th_client">Client</th>
+                  <th data-i18n="th_article">Article</th>
+                  <th data-i18n="th_quantity">Quantité</th>
+                  <th data-i18n="th_unit_price">Prix Unitaire</th>
+                  <th data-i18n="th_gross_total">Total Brut</th>
+                  <th data-i18n="th_discount">Remise</th>
+                  <th data-i18n="th_net_total">Net à Payer</th>
+                  <th data-i18n="th_payment">Paiement</th>
+                  <th data-i18n="th_vendeur">Vendeur</th>
+                  <th data-i18n="th_actions" class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="sales-table-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- CREDITS VIEW -->
+      <section id="view-credits" class="view" style="display:none;">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_credits">Crédits Clients</h1>
+            <p data-i18n="credits_subtitle" style="color: var(--text-secondary);">Suivi et règlements des ventes à crédit</p>
+          </div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="filter-panel" style="margin-bottom: 20px; display:flex; gap:16px;">
+            <input type="text" id="credits-search" class="btn-outline" style="flex:1; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Rechercher par client..." oninput="UI.refreshCredits()">
+            <select id="credits-filter-status" class="btn-outline" style="width:200px; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="UI.refreshCredits()">
+              <option value="all" data-i18n="opt_all_credits">Tous les crédits</option>
+              <option value="unpaid" data-i18n="opt_unpaid">Non payé</option>
+              <option value="partial" data-i18n="opt_partial">Partiel</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_date">Date</th>
+                  <th data-i18n="th_client">Client</th>
+                  <th data-i18n="th_article">Articles</th>
+                  <th data-i18n="th_net_total">Net à Payer</th>
+                  <th data-i18n="th_invoice_paid">Payé</th>
+                  <th data-i18n="th_invoice_balance">Reste</th>
+                  <th data-i18n="th_payment">Statut</th>
+                  <th data-i18n="th_vendeur">Vendeur</th>
+                  <th data-i18n="th_actions" class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="credits-table-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- STOCK VIEW -->
+      <section id="view-stock" class="view">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_stock">Gestion de Stock & Articles</h1>
+            <p data-i18n="stock_subtitle" style="color: var(--text-secondary);">Inventaire des articles de recharges, cartes SIM et packs</p>
+          </div>
+          <div class="view-actions" style="display:flex; gap:12px;">
+            <button class="btn btn-danger" onclick="openStockInvoiceModal()" id="btn-stock-invoice" style="background-color: var(--crimson); border-color: var(--crimson); font-weight:700; display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span data-i18n="btn_stock_invoice">Entrée par Facture</span>
+            </button>
+            <button class="btn btn-outline" onclick="openStockTransferModal()" id="btn-transfer-stock" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M17 3L21 7L17 11M21 7H3M7 21L3 17L7 13M3 17H21"/></svg>
+              <span data-i18n="btn_transfer_stock">Transfert Stock</span>
+            </button>
+            <button class="btn btn-outline" onclick="openStockMovementModal()" id="btn-adjust-stock-move" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M12 5v14M5 12h14"/></svg>
+              <span data-i18n="btn_adjust_stock">Ajustement Stock</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Stock Cards list -->
+        <div class="metrics-grid" id="stock-inventory-grid" style="margin-bottom: 32px;">
+          <!-- Seeding default articles boxes -->
+        </div>
+
+        <!-- Factures d'approvisionnement (Stock Invoices) Panel -->
+        <div class="glass-panel" style="margin-bottom: 32px;">
+          <div class="panel-header">
+            <h3 data-i18n="stock_invoices_title">Factures d'approvisionnement</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_date">Date</th>
+                  <th data-i18n="th_invoice_number">N° Facture</th>
+                  <th data-i18n="th_invoice_items_count">Articles</th>
+                  <th data-i18n="th_invoice_cost">Coût Total</th>
+                  <th data-i18n="th_invoice_paid">Payé</th>
+                  <th data-i18n="th_invoice_balance">Reste</th>
+                  <th data-i18n="th_payment">Paiement</th>
+                  <th data-i18n="th_notes">Notes</th>
+                  <th data-i18n="th_actions" class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="stock-invoices-table-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Sellers Stock Matrix -->
+        <div class="glass-panel" id="sellers-stock-matrix-panel" style="margin-bottom: 32px; display: none;">
+          <div class="panel-header">
+            <h3 data-i18n="sellers_stock_matrix_title">Stock Actuel des Vendeurs</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr id="sellers-stock-matrix-header">
+                  <th data-i18n="th_vendeur">Vendeur</th>
+                  <!-- dynamic article headers -->
+                </tr>
+              </thead>
+              <tbody id="sellers-stock-matrix-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="panel-header">
+            <h3 data-i18n="stock_movements_log">Historique des mouvements de stock</h3>
+          </div>
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_date">Date</th>
+                  <th data-i18n="th_article">Article</th>
+                  <th data-i18n="th_quantity">Quantité</th>
+                  <th data-i18n="th_type">Mouvement</th>
+                  <th data-i18n="th_vendeur">Opérateur</th>
+                  <th data-i18n="th_notes">Notes</th>
+                </tr>
+              </thead>
+              <tbody id="stock-movements-table-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TEAM VIEW -->
+      <section id="view-team" class="view">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_team">Gestion des Collaborateurs</h1>
+            <p data-i18n="team_subtitle" style="color: var(--text-secondary);">Gestion des profils de l'équipe (Administrateurs, Superviseurs, Vendeurs)</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-primary" onclick="openTeamModal()" id="btn-add-team" style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span data-i18n="btn_add_member">Ajouter Collaborateur</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_fullname">Nom Complet</th>
+                  <th data-i18n="th_email">E-mail</th>
+                  <th data-i18n="th_phone">Téléphone</th>
+                  <th data-i18n="th_role">Rôle</th>
+                  <th data-i18n="th_assigned_sector">Secteur assigné</th>
+                  <th data-i18n="th_dealer_code">Code Dealer</th>
+                  <th data-i18n="th_status">Statut Compte</th>
+                  <th data-i18n="th_actions" class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="team-table-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- REPORTS VIEW -->
+      <section id="view-reports" class="view">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_reports">Rapports d'activité</h1>
+            <p data-i18n="reports_subtitle" style="color: var(--text-secondary);">Rapports journaliers, par secteur et mensuels avec exports</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-outline" onclick="exportReportCSV()" data-i18n="btn_export_csv">Exporter CSV</button>
+            <button class="btn btn-primary" onclick="exportReportPDF()" data-i18n="btn_export_pdf" style="background-color: var(--primary); border-color: var(--primary);">Télécharger PDF</button>
+          </div>
+        </div>
+
+        <div class="glass-panel" style="margin-bottom: 24px;">
+          <div class="filter-panel" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
+            <div>
+              <label class="label" data-i18n="lbl_report_type">Type de Rapport</label>
+              <select id="report-type" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="updateReportFilters()">
+                <option value="daily" data-i18n="opt_rep_daily">Journalier par Agent</option>
+                <option value="sector" data-i18n="opt_rep_sector">Secteur géographique</option>
+                <option value="monthly" data-i18n="opt_rep_monthly">Mensuel global</option>
+              </select>
+            </div>
+            <div id="report-filter-date-wrapper">
+              <label class="label" data-i18n="lbl_date">Date</label>
+              <input type="date" id="report-filter-date" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" onchange="generateReport()">
+            </div>
+            <div id="report-filter-month-wrapper" style="display:none;">
+              <label class="label" data-i18n="lbl_month">Mois</label>
+              <input type="month" id="report-filter-month" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" onchange="generateReport()">
+            </div>
+            <div id="report-filter-agent-wrapper">
+              <label class="label" data-i18n="lbl_agent">Agent / Collaborateur</label>
+              <select id="report-filter-agent" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="generateReport()">
+                <option value="all" data-i18n="opt_all_agents">Tous les agents</option>
+              </select>
+            </div>
+            <div id="report-filter-sector-wrapper" style="display:none;">
+              <label class="label" data-i18n="lbl_sector">Secteur</label>
+              <input type="text" id="report-filter-sector" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: Maarif, Anfa..." oninput="generateReport()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Printable Report Container -->
+        <div class="glass-panel" id="printable-report-area">
+          <div class="report-print-header" style="text-align: center; margin-bottom: 24px; border-bottom: 2px solid var(--border-color); padding-bottom: 16px;">
+            <h2 id="report-heading" style="margin-bottom: 6px;">Rapport Journalier d'Activité</h2>
+            <p id="report-subheading" style="color: var(--text-secondary); font-size: 0.9rem;">Date : --</p>
+          </div>
+
+          <!-- Report Summary Mini Grid -->
+          <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px;">
+            <div style="text-align: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+              <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:uppercase;" data-i18n="rep_sales_volume">Volume Brut</div>
+              <div id="report-sum-gross" style="font-size:1.3rem; font-weight:700; margin-top:4px;">0.00 DH</div>
+            </div>
+            <div style="text-align: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+              <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:uppercase;" data-i18n="rep_discount_volume">Remises Accordées</div>
+              <div id="report-sum-discount" style="font-size:1.3rem; font-weight:700; margin-top:4px;">0.00 DH</div>
+            </div>
+            <div style="text-align: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+              <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:uppercase;" data-i18n="rep_net_volume">Montant Net</div>
+              <div id="report-sum-net" style="font-size:1.3rem; font-weight:700; margin-top:4px;">0.00 DH</div>
+            </div>
+          </div>
+
+          <!-- Report table -->
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_date">Date</th>
+                  <th data-i18n="th_client">Client</th>
+                  <th data-i18n="th_article">Article</th>
+                  <th data-i18n="th_quantity">Qté</th>
+                  <th data-i18n="th_unit_price">Prix Unitaire</th>
+                  <th data-i18n="th_gross_total">Total Brut</th>
+                  <th data-i18n="th_discount">Remise</th>
+                  <th data-i18n="th_net_total">Net</th>
+                  <th data-i18n="th_payment">Paiement</th>
+                  <th data-i18n="th_vendeur">Vendeur</th>
+                </tr>
+              </thead>
+              <tbody id="report-table-body">
+                <tr>
+                  <td colspan="10" style="text-align:center; color:var(--text-muted);" data-i18n="msg_no_report_data">Sélectionnez les filtres pour générer le rapport.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONFIGURATION/SETTINGS VIEW -->
+      <section id="view-settings" class="view">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_settings">Configuration Système</h1>
+            <p data-i18n="settings_subtitle" style="color: var(--text-secondary);">Connexion de base de données Supabase et paramètres locaux</p>
+          </div>
+        </div>
+
+        <div class="glass-panel" style="max-width: 600px; margin-bottom: 24px;">
+          <h3 data-i18n="settings_supabase_title" style="margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">Identifiants Supabase</h3>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="label">Supabase Project URL</label>
+            <input type="text" id="setting-supabase-url" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="https://xxxxxx.supabase.co">
+          </div>
+          <div class="form-group" style="margin-bottom:20px;">
+            <label class="label">Supabase Anon Key</label>
+            <input type="password" id="setting-supabase-key" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()" data-i18n="btn_save_settings">Enregistrer & Recharger</button>
+        </div>
+
+        <div class="glass-panel" style="max-width: 600px;">
+          <h3 data-i18n="settings_demo_mode" style="margin-bottom:12px;">Mode Offline / Démo local</h3>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;" data-i18n="settings_demo_desc">
+            Si aucun identifiant Supabase n'est fourni, l'application fonctionne en mode hors ligne en utilisant le stockage local du navigateur (LocalStorage).
+          </p>
+          <button class="btn btn-outline" onclick="clearLocalDatabase()" style="color: var(--crimson); border-color: var(--crimson);" data-i18n="btn_clear_db">Effacer la base de données locale</button>
+        </div>
+      </section>
+      
+    </main>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- MODALS AND POPUPS -->
+  <!-- ============================================ -->
+
+  <!-- MODAL OVERLAY -->
+  <div id="modal-overlay" class="modal-overlay" style="display:none;" onclick="closeActiveModal()"></div>
+
+  <!-- NOUVELLE VENTE SALES MODAL -->
+  <div id="sales-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+        <h3 data-i18n="modal_new_sale_title">Vente Recharge & SIM</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="sales-form">
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_client">Client *</label>
+            <select id="sale-client-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
+              <!-- populated by JS -->
+            </select>
+          </div>
+
+          <!-- Dynamic Articles List -->
+          <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px; background: rgba(255,255,255,0.01);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <strong style="font-size:0.95rem; color:var(--text-primary);">Articles de la Vente</strong>
+              <button type="button" class="btn btn-outline btn-sm" onclick="addSaleItemRow()" style="padding: 4px 10px;">+ Ajouter</button>
+            </div>
+            <!-- Header for columns -->
+            <div style="display:grid; grid-template-columns: 2.2fr 1fr 1fr 1fr 40px; gap: 8px; margin-bottom: 8px; font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">
+              <span>Article / Recharge</span>
+              <span>Qté</span>
+              <span>P.U (DH)</span>
+              <span style="text-align:right;">Total</span>
+              <span></span>
+            </div>
+            <div id="sale-items-container" style="display:flex; flex-direction:column; gap:12px; max-height:220px; overflow-y:auto; padding-right:4px;">
+              <!-- Dynamic rows added by JS -->
+            </div>
+          </div>
+
+          <!-- Discount / Remise configuration -->
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_discount_type">Type de remise</label>
+              <select id="sale-discount-type" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="calculateSaleTotals()">
+                <option value="none" data-i18n="opt_disc_none">Aucune</option>
+                <option value="percentage" data-i18n="opt_disc_percent" selected>Pourcentage (%)</option>
+                <option value="fixed" data-i18n="opt_disc_fixed">Montant fixe (DH)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_discount_value">Valeur de la remise</label>
+              <input type="number" step="any" id="sale-discount-value" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" value="6.5" oninput="calculateSaleTotals()">
+            </div>
+          </div>
+
+          <!-- Totals calculation outputs -->
+          <div class="glass-panel" style="padding:16px; margin-bottom:16px; display:grid; grid-template-columns:repeat(3, 1fr); text-align:center; gap:8px; background:rgba(255,255,255,0.01);">
+            <div>
+              <span style="font-size:0.75rem; color:var(--text-secondary);" data-i18n="total_gross_label">Total Brut</span>
+              <div id="sale-calc-gross" style="font-size:1.1rem; font-weight:700; margin-top:2px; color:var(--text-secondary);">0.00 DH</div>
+            </div>
+            <div>
+              <span style="font-size:0.75rem; color:var(--text-secondary);" data-i18n="discount_amount_label">Montant Remise</span>
+              <div id="sale-calc-discount" style="font-size:1.1rem; font-weight:700; margin-top:2px; color:var(--amber);">0.00 DH</div>
+            </div>
+            <div>
+              <span style="font-size:0.75rem; color:var(--text-secondary);" data-i18n="total_net_label">Total Net</span>
+              <div id="sale-calc-net" style="font-size:1.15rem; font-weight:700; margin-top:2px; color:var(--success);">0.00 DH</div>
+            </div>
+          </div>
+
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_payment_status">Statut de paiement *</label>
+              <select id="sale-payment-status" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required onchange="toggleSaleInitialPaidField()">
+                <option value="paid" data-i18n="opt_paid">Payé</option>
+                <option value="unpaid" data-i18n="opt_unpaid">Non payé</option>
+                <option value="partial" data-i18n="opt_partial">Partiel</option>
+              </select>
+            </div>
+            <div class="form-group" id="sale-initial-paid-group" style="display: none;">
+              <label class="label" data-i18n="lbl_initial_paid">Montant payé initial (DH) *</label>
+              <input type="number" id="sale-initial-paid" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" step="0.01" value="0">
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_notes">Notes / Observations</label>
+              <input type="text" id="sale-notes" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: Type d'operateur, note client...">
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" style="background-color: var(--primary);" data-i18n="btn_save_sale">Confirmer la Vente</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENT ADD/EDIT MODAL -->
+  <div id="client-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+        <h3 id="client-modal-title" data-i18n="modal_new_client_title">Nouveau Client</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="client-form">
+          <input type="hidden" id="client-form-id">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="label" data-i18n="lbl_fullname">Nom Complet *</label>
+            <input type="text" id="client-name" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required>
+          </div>
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_phone">Téléphone *</label>
+              <input type="tel" id="client-phone" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required placeholder="06XXXXXXXX">
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_dealer_number">Numéro Dealer *</label>
+              <input type="text" id="client-dealer" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required placeholder="DL-XXXX">
+            </div>
+          </div>
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_activity_type">Type d'activité *</label>
+              <select id="client-activity" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
+                <option value="AG" data-i18n="activity_ag">AG : Alimentation Générale</option>
+                <option value="BT" data-i18n="activity_bt" selected>BT : Bureau de Tabac</option>
+                <option value="LP" data-i18n="activity_lp">LP : Librairie & Papeterie</option>
+                <option value="VPA" data-i18n="activity_vpa">VPA : Vente Portable et Accessoires</option>
+                <option value="KY" data-i18n="activity_ky">KY : Kiosque</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_address">Adresse</label>
+              <input type="text" id="client-address" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+            </div>
+          </div>
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label">Latitude (GPS X)</label>
+              <input type="number" step="any" id="client-latitude" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: 33.5731">
+            </div>
+            <div class="form-group">
+              <label class="label">Longitude (GPS Y)</label>
+              <div style="display:flex; gap:8px;">
+                <input type="number" step="any" id="client-longitude" class="btn-outline" style="flex:1; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: -7.5898">
+                <button type="button" class="btn btn-outline" onclick="detectGPS()" style="padding:10px;" title="Géolocaliser">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="label" data-i18n="lbl_notes">Notes / Observations</label>
+            <input type="text" id="client-notes" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+          </div>
+          <div class="form-group" id="client-vendeur-group" style="margin-bottom:20px;">
+            <label class="label" data-i18n="lbl_client_assignee">Vendeur / Assigné</label>
+            <select id="client-vendeur-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+              <!-- populated by JS -->
+            </select>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEAM COLLABORATOR ADD/EDIT MODAL -->
+  <div id="team-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+        <h3 id="team-modal-title" data-i18n="modal_new_team_title">Ajouter un Collaborateur</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="team-form">
+          <input type="hidden" id="team-form-id">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="label" data-i18n="lbl_fullname">Nom Complet *</label>
+            <input type="text" id="team-name" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required>
+          </div>
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label">Adresse E-mail *</label>
+              <input type="email" id="team-email" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required placeholder="collaborateur@recharge.com">
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_phone">Téléphone</label>
+              <input type="tel" id="team-phone" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="06XXXXXXXX">
+            </div>
+          </div>
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_role">Rôle *</label>
+              <select id="team-role" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
+                <option value="employee" data-i18n="role_employee">Vendeur</option>
+                <option value="supervisor" data-i18n="role_supervisor">Superviseur</option>
+                <option value="admin" data-i18n="role_admin">Admin</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_assigned_sector">Secteur assigné</label>
+              <input type="text" id="team-sector" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: Maarif, Anfa...">
+            </div>
+          </div>
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="label" data-i18n="lbl_dealer_code">Code Dealer</label>
+              <input type="text" id="team-dealer-code" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: D-001">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="label">Mot de passe</label>
+              <input type="password" id="team-password" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Laisser vide pour ne pas modifier" autocomplete="new-password">
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK MOVEMENT ADJUSTMENT MODAL -->
+  <div id="stock-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+        <h3 data-i18n="modal_stock_adjust_title">Ajustement du Stock</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="stock-form">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="label" data-i18n="lbl_article">Article *</label>
+            <select id="stock-article-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
+              <!-- populated by JS -->
+            </select>
+          </div>
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_movement_type">Type de mouvement *</label>
+              <select id="stock-movement-type" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
+                <option value="in" data-i18n="opt_stock_in">Entrée (+)</option>
+                <option value="out" data-i18n="opt_stock_out">Sortie (-)</option>
+                <option value="correction" data-i18n="opt_stock_correction">Correction</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_quantity">Quantité *</label>
+              <input type="number" id="stock-quantity-input" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required min="1">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:20px;">
+            <label class="label" data-i18n="lbl_notes">Notes / Rationale *</label>
+            <input type="text" id="stock-notes" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required placeholder="Ex: Livraison fournisseur, correction erreur...">
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Appliquer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK INVOICE MODAL -->
+  <div id="stock-invoice-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 id="stock-invoice-modal-title" data-i18n="modal_stock_invoice_title">Nouvel Approvisionnement (Facture)</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="stock-invoice-form">
+          <div class="grid-3-cols" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px;">
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_invoice_number">Numéro de Facture *</label>
+              <input type="text" id="stock-invoice-number" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required placeholder="Ex: 1233322">
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_discount_percentage">Remise (%)</label>
+              <input type="number" id="stock-invoice-discount" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" max="100" step="0.01" value="0">
+            </div>
+            <div class="form-group">
+              <label class="label" data-i18n="lbl_notes">Notes / Observations</label>
+              <input type="text" id="stock-invoice-notes" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: Arrivage Orange/Telecom/Inwi...">
+            </div>
+          </div>
+
+          <div class="form-group" id="stock-invoice-vendeur-group" style="margin-bottom: 16px;">
+            <label class="label" data-i18n="lbl_vendeur_destinataire">Vendeur / Destinataire</label>
+            <select id="stock-invoice-vendeur-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+              <!-- populated by JS -->
+            </select>
+          </div>
+ 
+          <label class="label" style="margin-bottom: 8px; display: block; font-weight: 600;" data-i18n="lbl_quantities_by_article">Quantités par article</label>
+          <div id="stock-invoice-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; max-height: 280px; overflow-y: auto; padding-right: 4px;">
+            <!-- Will be dynamically populated by JS with input fields for all 10 articles -->
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT STOCK INVOICE MODAL -->
+  <div id="edit-stock-invoice-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 id="edit-stock-invoice-modal-title" data-i18n="modal_edit_stock_invoice_title">Modifier la Facture</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="edit-stock-invoice-form">
+          <input type="hidden" id="edit-stock-invoice-old-number">
+          
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_invoice_number">Numéro de Facture *</label>
+            <input type="text" id="edit-stock-invoice-number" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required>
+          </div>
+          
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_discount_percentage">Remise (%)</label>
+            <input type="number" id="edit-stock-invoice-discount" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" max="100" step="0.01" value="0">
+          </div>
+          
+          <div class="form-group" style="margin-bottom:20px;">
+            <label class="label" data-i18n="lbl_notes">Notes / Observations</label>
+            <input type="text" id="edit-stock-invoice-notes" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+          </div>
+          
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK TRANSFER MODAL -->
+  <div id="stock-transfer-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 data-i18n="modal_stock_transfer_title">Transfert de Stock</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="stock-transfer-form">
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+               <label class="label" data-i18n="lbl_transfer_source">Source *</label>
+               <select id="transfer-source-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required onchange="onTransferSourceOrArticleChanged()">
+                 <!-- populated by JS -->
+               </select>
+            </div>
+            <div class="form-group">
+               <label class="label" data-i18n="lbl_transfer_dest">Destination *</label>
+               <select id="transfer-dest-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
+                 <!-- populated by JS -->
+               </select>
+            </div>
+          </div>
+          
+          <div class="grid-2-cols" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">
+            <div class="form-group">
+               <label class="label" data-i18n="lbl_article">Article *</label>
+               <select id="transfer-article-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required onchange="onTransferSourceOrArticleChanged()">
+                 <!-- populated by JS -->
+               </select>
+            </div>
+            <div class="form-group">
+               <label class="label" data-i18n="lbl_quantity">Quantité *</label>
+               <input type="number" id="transfer-qty-input" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required min="1">
+               <span id="transfer-max-stock-helper" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; display: block;">Max disponible : 0</span>
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-bottom:20px;">
+             <label class="label" data-i18n="lbl_notes">Notes / Observations</label>
+             <input type="text" id="transfer-notes" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Ex: Ravitaillement secteur Maarif...">
+          </div>
+          
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+             <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+             <button type="submit" class="btn btn-primary" data-i18n="btn_save">Transférer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK INVOICE DETAILS MODAL -->
+  <div id="stock-invoice-details-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 data-i18n="modal_invoice_details_title">Détails de la Facture</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <div style="margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px 16px;">
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-secondary);" data-i18n="lbl_invoice_number">N° Facture</span>
+              <span id="detail-invoice-number" style="font-weight:700; color:var(--text-primary);">--</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-secondary);" data-i18n="lbl_date">Date</span>
+              <span id="detail-invoice-date" style="color:var(--text-primary);">--</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-secondary);" data-i18n="lbl_agent">Agent</span>
+              <span id="detail-invoice-agent" style="color:var(--text-primary);">--</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-secondary);" data-i18n="lbl_notes">Notes</span>
+              <span id="detail-invoice-notes" style="color:var(--text-primary);">--</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-secondary);" data-i18n="lbl_gross_invoice">Total Brut</span>
+              <span id="detail-invoice-gross" style="color:var(--text-primary);">0.00 DH</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-secondary);" data-i18n="lbl_discount_percentage">Remise (%)</span>
+              <span id="detail-invoice-discount" style="color:var(--amber);">0.00%</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; grid-column: span 2; border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px;">
+              <span style="color:var(--text-secondary); font-weight: 600;" data-i18n="lbl_net_invoice">Coût Net</span>
+              <span id="detail-invoice-net" style="font-weight:700; color:var(--success);">0.00 DH</span>
+            </div>
+          </div>
+        </div>
+
+        <table class="table" style="margin-bottom: 20px;">
+          <thead>
+            <tr>
+              <th data-i18n="th_article">Article</th>
+              <th data-i18n="th_quantity" class="text-right">Quantité</th>
+            </tr>
+          </thead>
+          <tbody id="stock-invoice-details-body">
+            <!-- populated by JS -->
+          </tbody>
+        </table>
+
+        <h4 style="margin-top: 20px; margin-bottom: 8px; font-weight: 600;" data-i18n="lbl_payments_list">Règlements Effectués</h4>
+        <div class="table-responsive" style="max-height: 150px; overflow-y: auto; margin-bottom: 20px;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th data-i18n="th_date">Date</th>
+                <th data-i18n="th_amount">Montant</th>
+                <th data-i18n="th_vendeur">Opérateur</th>
+                <th data-i18n="th_receipt" class="text-right">Reçu</th>
+              </tr>
+            </thead>
+            <tbody id="stock-invoice-payments-body">
+              <!-- populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end;">
+          <button class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_close">Fermer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUPPLIER PAYMENT MODAL -->
+  <div id="supplier-payment-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 id="supplier-payment-modal-title" data-i18n="modal_supplier_payment_title">Enregistrer un Règlement</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="supplier-payment-form">
+          <input type="hidden" id="payment-invoice-number">
+          
+          <div style="margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; font-size: 0.9rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Facture N°:</span>
+              <strong id="payment-info-invoice">--</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Total Facture:</span>
+              <strong id="payment-info-total">0.00 DH</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span>Déjà Payé:</span>
+              <strong id="payment-info-paid" style="color:var(--success);">0.00 DH</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span>Reste à payer:</span>
+              <strong id="payment-info-balance" style="color:var(--crimson);">0.00 DH</strong>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_payment_amount">Montant du Règlement (DH) *</label>
+            <input type="number" id="payment-amount" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required step="0.01" min="0.01">
+          </div>
+
+          <div class="form-group" style="margin-bottom:20px;">
+            <label class="label" data-i18n="lbl_payment_photo">Photo du Virement / Reçu *</label>
+            <input type="file" id="payment-photo" accept="image/*" class="btn-outline" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required>
+            <div id="payment-photo-preview" style="margin-top: 10px; text-align: center; display: none;">
+              <img id="payment-preview-img" src="" style="max-width: 100%; max-height: 150px; border-radius: 4px; border: 1px solid var(--border-color);">
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Valider le Paiement</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENT CREDIT PAYMENT MODAL -->
+  <div id="credit-payment-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 id="credit-payment-modal-title" data-i18n="modal_credit_payment_title">Enregistrer un Règlement Client</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="credit-payment-form">
+          <input type="hidden" id="credit-payment-sale-id">
+          
+          <div style="margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; font-size: 0.9rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span data-i18n="th_client">Client:</span>
+              <strong id="credit-info-client">--</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span data-i18n="total_net_label">Net à Payer:</span>
+              <strong id="credit-info-total">0.00 DH</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span style="color:var(--text-secondary);" data-i18n="th_invoice_paid">Déjà Payé:</span>
+              <strong id="credit-info-paid" style="color:var(--success);">0.00 DH</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-secondary);" data-i18n="th_invoice_balance">Reste à payer:</span>
+              <strong id="credit-info-balance" style="color:var(--crimson);">0.00 DH</strong>
+            </div>
+          </div>
+
+          <!-- Historique des règlements client -->
+          <div id="credit-payments-history-container" style="margin-bottom: 16px; display: none;">
+            <label class="label" style="font-weight: 600; margin-bottom: 6px; display: block;">Historique des Règlements</label>
+            <div class="table-responsive" style="max-height: 120px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 12px;">
+              <table class="table" style="font-size: 0.8rem; margin-bottom: 0;">
+                <thead>
+                  <tr style="background: rgba(255,255,255,0.02);">
+                    <th style="padding: 6px 12px;">Date</th>
+                    <th style="padding: 6px 12px;">Montant</th>
+                    <th style="padding: 6px 12px;">Mode</th>
+                    <th style="padding: 6px 12px;" class="text-right">Reçu</th>
+                  </tr>
+                </thead>
+                <tbody id="credit-payments-history-body">
+                  <!-- populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_payment_amount">Montant du Règlement (DH) *</label>
+            <input type="number" id="credit-payment-amount" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required step="0.01" min="0.01">
+          </div>
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_payment_method">Mode de règlement *</label>
+            <select id="credit-payment-method" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required onchange="onCreditPaymentMethodChanged()">
+              <option value="cash" data-i18n="payment_method_cash">Espèces</option>
+              <option value="virement" data-i18n="payment_method_virement">Virement bancaire / Versement</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="credit-payment-photo-group" style="margin-bottom:20px; display: none;">
+            <label class="label" data-i18n="lbl_payment_photo">Photo du Virement / Reçu *</label>
+            <input type="file" id="credit-payment-photo" accept="image/*" class="btn-outline" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+            <div id="credit-payment-photo-preview" style="margin-top: 10px; text-align: center; display: none;">
+              <img id="credit-preview-img" src="" style="max-width: 100%; max-height: 150px; border-radius: 4px; border: 1px solid var(--border-color);">
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Valider le Paiement</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT PHOTO VIEWER MODAL -->
+  <div id="payment-photo-modal" class="modal" style="display:none; z-index: 10001;">
+    <div class="modal-content glass-panel" style="max-width: 600px; text-align: center;">
+      <div class="modal-header">
+        <h3 data-i18n="modal_payment_photo_title">Reçu du Virement</h3>
+        <button class="close-modal-btn" onclick="closePaymentPhotoModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <img id="viewer-payment-img" src="" style="max-width: 100%; max-height: 70vh; border-radius: 8px; border: 1px solid var(--border-color);">
+        <div style="margin-top: 16px; display:flex; justify-content:center;">
+          <button class="btn btn-outline" onclick="closePaymentPhotoModal()" data-i18n="btn_close">Fermer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SALES RECEIPT PRINT MODAL -->
+  <div id="receipt-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 data-i18n="modal_receipt_title">Facture / Reçu Client</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <div id="printable-receipt" style="background:#fff; color:#000; padding:20px; border-radius:4px; font-family:'Courier New', monospace; font-size:0.85rem;">
+          <div style="text-align:center; border-bottom:1px dashed #000; padding-bottom:12px; margin-bottom:12px;">
+            <h3 style="margin:0; font-weight:700;">RECHARGE & SIM MANAGER</h3>
+            <p style="margin:2px 0 0 0; font-size:0.75rem;">Recharge & SIM Dealer</p>
+            <p style="margin:2px 0 0 0; font-size:0.75rem;" id="receipt-seller-name">Vendeur: --</p>
+          </div>
+          <div style="margin-bottom:12px; font-size:0.8rem;">
+            <div><strong>Date:</strong> <span id="receipt-date">--</span></div>
+            <div><strong>N° Vente:</strong> <span id="receipt-sale-id">--</span></div>
+            <div><strong>Client:</strong> <span id="receipt-client-name">--</span></div>
+            <div><strong>Dealer ID:</strong> <span id="receipt-client-dealer">--</span></div>
+          </div>
+          <table style="width:100%; border-collapse:collapse; margin-bottom:12px; font-size:0.8rem;">
+            <thead>
+              <tr style="border-bottom:1px solid #000; text-align:left;">
+                <th>Désignation</th>
+                <th>Qté</th>
+                <th>P.U</th>
+                <th style="text-align:right;">Total</th>
+              </tr>
+            </thead>
+            <tbody id="receipt-items-tbody">
+              <!-- populated by JS -->
+            </tbody>
+          </table>
+          <div style="border-top:1px dashed #000; padding-top:8px; font-size:0.8rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span>Total Brut:</span>
+              <span id="receipt-gross">0.00 DH</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px; color:#555;">
+              <span>Remise:</span>
+              <span id="receipt-discount">0.00 DH</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-weight:700; font-size:0.95rem; border-top:1px solid #000; padding-top:4px;">
+              <span>NET A PAYER:</span>
+              <span id="receipt-net">0.00 DH</span>
+            </div>
+          </div>
+          <div style="margin-top:12px; font-size:0.8rem;">
+            <div><strong>Statut Paiement:</strong> <span id="receipt-payment">--</span></div>
+          </div>
+          <div id="receipt-qr" style="text-align:center; margin-top:16px;">
+            <!-- QR code generated dynamically -->
+          </div>
+          <div style="text-align:center; font-size:0.7rem; color:#555; margin-top:16px; border-top:1px dashed #000; padding-top:10px;">
+            Merci pour votre confiance !
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+          <button class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_close">Fermer</button>
+          <button class="btn btn-primary" onclick="printReceiptTicket()" data-i18n="btn_print">Imprimer / PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="modal-overlay" style="display:flex; align-items:center; justify-content:center; background:rgba(10, 5, 20, 0.93); z-index:9999;">
+    <div style="text-align:center;">
+      <div style="width:50px; height:50px; border:4px solid var(--primary-light); border-top-color:var(--primary); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 16px;"></div>
+      <p style="color:var(--text-primary);" data-i18n="msg_loading">Chargement des données...</p>
+    </div>
+  </div>
+
+  <!-- QR SCANNER MODAL -->
+  <div id="qr-scanner-modal" class="modal" style="display:none; z-index: 10002;">
+    <div class="modal-content glass-panel" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3>Scanner QR Code</h3>
+        <button class="close-modal-btn" onclick="closeQRScanner()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px; text-align:center;">
+        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; border-radius: 8px; overflow: hidden; background: #000;"></div>
+        <div style="margin-top: 16px; display:flex; justify-content:center; gap:12px;">
+          <button class="btn btn-outline" onclick="closeQRScanner()">Fermer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENT QR VIEWER MODAL -->
+  <div id="client-qr-modal" class="modal" style="display:none; z-index: 10001;">
+    <div class="modal-content glass-panel" style="max-width: 400px; text-align: center;">
+      <div class="modal-header">
+        <h3>QR Code Client</h3>
+        <button class="close-modal-btn" onclick="closeClientQRModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+        <div id="large-client-qr" style="background: #fff; padding: 16px; border-radius: 8px;"></div>
+        <div>
+          <strong id="client-qr-modal-name" style="font-size: 1.1rem; color:var(--text-primary);">Nom Client</strong>
+          <div id="client-qr-modal-dealer" style="color: var(--text-secondary); margin-top: 4px;">Dealer ID</div>
+        </div>
+        <button class="btn btn-primary" onclick="printClientQR()" style="margin-top: 8px; width: 100%;">Imprimer QR</button>
+        <button class="btn btn-outline" onclick="closeClientQRModal()" style="width: 100%;">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENTS IMPORT PREVIEW MODAL -->
+  <div id="client-import-modal" class="modal" style="display:none; z-index: 10001;">
+    <div class="modal-content glass-panel" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 id="client-import-title" data-i18n="modal_import_preview_title">Aperçu de l'importation</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <p id="client-import-summary" style="margin-bottom:16px; color:var(--text-secondary);"></p>
+        <div class="table-responsive" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 20px;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nom Complet</th>
+                <th>Téléphone</th>
+                <th>Numéro Dealer</th>
+                <th>Activité</th>
+                <th>Adresse</th>
+              </tr>
+            </thead>
+            <tbody id="client-import-table-body">
+              <!-- JS populated -->
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:12px;">
+          <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+          <button type="button" class="btn btn-primary" onclick="confirmClientImport()" data-i18n="btn_confirm_import">Confirmer l'importation</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <!-- Load JS Services -->
+  <script src="/js/db.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/pdf.js"></script>
+  <script src="/js/qr.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

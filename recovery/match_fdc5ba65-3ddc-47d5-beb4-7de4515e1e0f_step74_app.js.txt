@@ -1,0 +1,2517 @@
+ *��
+����̉�%"��
+hbqzpsh0write_to_file��{"ArtifactMetadata":{"ArtifactType":"other","RequestFeedback":false,"Summary":"Complete app.js frontend logic containing database linkages, customer CRUD, parcel logging with automatic tracking IDs, dynamic country rate lookups, status updates, invoice generators, Excel exporters, backup utilities, and login handling."},"CodeContent":"// Initialize Realm DB Database\nlet realm;\n\n// Current Active View State\nlet currentView = 'dashboard';\n\n// Global variables for edit states\nlet currentEditingCustomer = null;\nlet currentEditingShipment = null;\n\n// ==========================================================================\n// 1. APPLICATION INITIALIZATION \u0026 CORE TRIGGERS\n// ==========================================================================\n\ndocument.addEventListener('DOMContentLoaded', () =\u003e {\n  // Open Database\n  realm = window.RealmDatabase.open();\n  \n  // Check User Session\n  checkSession();\n});\n\nfunction checkSession() {\n  const session = sessionStorage.getItem('atlas_cargo_session');\n  const loginOverlay = document.getElementById('login-overlay');\n  const appShell = document.getElementById('app-shell');\n\n  if (session) {\n    loginOverlay.style.display = 'none';\n    appShell.style.display = 'flex';\n    \n    // Parse user profile\n    const user = JSON.parse(session);\n    document.getElementById('header-username').textContent = user.name;\n    document.getElementById('header-avatar').textContent = user.name.charAt(0);\n    \n    initApp();\n  } else {\n    loginOverlay.style.display = 'flex';\n    appShell.style.display = 'none';\n  }\n}\n\nfunction handleLogin() {\n  const usernameInput = document.getElementById('login-username').value.trim();\n  const passwordInput = document.getElementById('login-password').value;\n  const errorMsg = document.getElementById('login-error-msg');\n\n  // Query User in Realm Database Emulation\n  const users = realm.objects('User').filtered(`username == '${usernameInput}'`);\n\n  if (users.length \u003e 0 \u0026\u0026 users[0].password === passwordInput) {\n    const user = users[0];\n    sessionStorage.setItem('atlas_cargo_session', JSON.stringify({\n      username: user.username,\n      name: user.name,\n      role: user.role\n    }));\n    errorMsg.style.display = 'none';\n    checkSession();\n  } else {\n    errorMsg.style.display = 'block';\n  }\n}\n\nfunction handleLogout() {\n  sessionStorage.removeItem('atlas_cargo_session');\n  checkSession();\n}\n\nfunction initApp() {\n  // Reset navigation\n  switchView('dashboard');\n  \n  // Populate country list inputs in the shipment modal\n  populateShipmentModalCountries();\n  \n  // Populate country filter dropdown in shipments view\n  populateShipmentsCountryFilter();\n\n  // Populate date inputs for reports\n  const today = new Date().toISOString().split('T')[0];\n  document.getElementById('report-date-input').value = today;\n  const currentMonth = today.substring(0, 7);\n  document.getElementById('report-month-input').value = currentMonth;\n}\n\n// Navigation Switcher\nfunction switchView(viewName) {\n  // Update sidebar menu highlight\n  const menuItems = document.querySelectorAll('.sidebar-menu .menu-item');\n  menuItems.forEach(item =\u003e item.classList.remove('active'));\n  \n  const targetMenu = document.getElementById(`menu-${viewName}`);\n  if (targetMenu) targetMenu.classList.add('active');\n\n  // Switch panels\n  const panels = document.querySelectorAll('.view-panel');\n  panels.forEach(panel =\u003e panel.classList.remove('active'));\n  \n  const targetPanel = document.getElementById(`view-${viewName}`);\n  if (targetPanel) targetPanel.classList.add('active');\n\n  currentView = viewName;\n\n  // Header Title Customization\n  const pageTitle = document.getElementById('page-view-title');\n  const pageSubtitle = document.getElementById('page-view-subtitle');\n\n  switch (viewName) {\n    case 'dashboard':\n      pageTitle.textContent = 'لوحة التحكم';\n      pageSubtitle.textContent = 'نظرة عامة على نشاط وكالة الشحن الدولي اليوم';\n      renderDashboard();\n      break;\n    case 'shipments':\n      pageTitle.textContent = 'الطرود والشحنات';\n      pageSubtitle.textContent = 'إدارة ومتابعة الشحنات والطرود الصادرة إلى أوروبا';\n      renderShipments();\n      break;\n    case 'customers':\n      pageTitle.textContent = 'إدارة العملاء';\n      pageSubtitle.textContent = 'تسجيل وإدارة العملاء بالوكالة ومراجعة سجلات شحنهم';\n      renderCustomers();\n      break;\n    case 'pricing':\n      pageTitle.textContent = 'تعرفة الشحن للدول الأوروبية';\n      pageSubtitle.textContent = 'تعديل وتحديد تسعيرة الشحن لكل بلد أوروبي بالدرهم';\n      renderPricingSettings();\n      break;\n    case 'reports':\n      pageTitle.textContent = 'التقارير المالية والنشاط';\n      pageSubtitle.textContent = 'استعراض تقارير الأرباح والشحنات وتصديرها PDF أو Excel';\n      generateReportData();\n      break;\n    case 'settings':\n      pageTitle.textContent = 'الإعدادات والنسخ الاحتياطي';\n      pageSubtitle.textContent = 'أدوات الصيانة، النسخ الاحتياطي لقاعدة البيانات واستعادتها';\n      break;\n  }\n}\n\n// Generate unique tracking number (MA-EU-XXXXXX)\nfunction generateTrackingNumber() {\n  const chars = '0123456789';\n  let random = '';\n  for (let i = 0; i \u003c 6; i++) {\n    random += chars.charAt(Math.floor(Math.random() * chars.length));\n  }\n  return `MA-EU-${random}`;\n}\n\n// Generate unique customer ID (CUST-XXXX)\nfunction generateCustomerID() {\n  const chars = '0123456789';\n  let random = '';\n  for (let i = 0; i \u003c 4; i++) {\n    random += chars.charAt(Math.floor(Math.random() * chars.length));\n  }\n  return `CUST-${random}`;\n}\n\n// Helper to format currency\nfunction formatMAD(amount) {\n  return `${Number(amount).toFixed(2)} DH`;\n}\n\n// Helper to translate status codes to Arabic\nconst STATUS_AR = {\n  'received': 'قيد الاستلام',\n  'processing': 'قيد المعالجة',\n  'transit': 'في الطريق',\n  'arrived': 'وصلت بلد الوجهة',\n  'delivered': 'تم التسليم',\n  'cancelled': 'ملغاة'\n};\n\n// ==========================================================================\n// 2. DASHBOARD PANEL LOGIC\n// ==========================================================================\n\nfunction renderDashboard() {\n  const shipments = realm.objects('Shipment');\n  \n  // Compute KPIs\n  const totalCount = shipments.length;\n  const transitCount = shipments.filtered(\"status == 'transit'\").length;\n  const processingCount = shipments.filtered(\"status == 'processing'\").length;\n  const receivedCount = shipments.filtered(\"status == 'received'\").length;\n  const arrivedCount = shipments.filtered(\"status == 'arrived'\").length;\n  \n  const pendingCount = processingCount + receivedCount + arrivedCount;\n  const deliveredCount = shipments.filtered(\"status == 'delivered'\").length;\n  const cancelledCount = shipments.filtered(\"status == 'cancelled'\").length;\n\n  // Compute monthly profit (sum prices of delivered/active shipments created this month)\n  const now = new Date();\n  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;\n  \n  const currentMonthShipments = shipments.filter(s =\u003e \n    s.createdAt.startsWith(currentYearMonth) \u0026\u0026 s.status !== 'cancelled'\n  );\n  const monthlyRevenue = currentMonthShipments.reduce((sum, s) =\u003e sum + s.shippingPrice, 0);\n\n  // Update UI Elements\n  document.getElementById('kpi-total-shipments').textContent = totalCount;\n  document.getElementById('kpi-transit-shipments').textContent = pendingCount;\n  document.getElementById('kpi-delivered-shipments').textContent = deliveredCount;\n  document.getElementById('kpi-cancelled-shipments').textContent = cancelledCount;\n  document.getElementById('kpi-monthly-profits').textContent = formatMAD(monthlyRevenue);\n\n  // Render recent 5 shipments\n  const sortedShipments = shipments.sorted('createdAt', true).slice(0, 5);\n  const recentTable = document.getElementById('dashboard-recent-table-body');\n  recentTable.innerHTML = '';\n\n  if (sortedShipments.length === 0) {\n    recentTable.innerHTML = `\u003ctr\u003e\u003ctd colspan=\"8\" style=\"text-align:center; padding:30px; color:var(--text-secondary);\"\u003eلا توجد شحنات مسجلة حالياً بالوكالة\u003c/td\u003e\u003c/tr\u003e`;\n  } else {\n    sortedShipments.forEach(s =\u003e {\n      const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];\n      const flag = countryObj ? countryObj.flag : '';\n      const countryName = countryObj ? countryObj.countryName : s.destinationCountry;\n\n      recentTable.innerHTML += `\n        \u003ctr\u003e\n          \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700; color:var(--primary-color);\"\u003e${s.trackingNumber}\u003c/td\u003e\n          \u003ctd\u003e\u003cstrong\u003e${s.senderName}\u003c/strong\u003e\u003c/td\u003e\n          \u003ctd\u003e${s.receiverName}\u003c/td\u003e\n          \u003ctd\u003e\n            \u003cdiv class=\"country-item\"\u003e\n              \u003cspan class=\"country-flag\"\u003e${flag}\u003c/span\u003e\n              \u003cspan\u003e${countryName}\u003c/span\u003e\n            \u003c/div\u003e\n          \u003c/td\u003e\n          \u003ctd\u003e${s.weight} كجم (${s.quantity} طرود)\u003c/td\u003e\n          \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${formatMAD(s.shippingPrice)}\u003c/td\u003e\n          \u003ctd\u003e\u003cspan class=\"badge badge-${s.status}\"\u003e${STATUS_AR[s.status]}\u003c/span\u003e\u003c/td\u003e\n          \u003ctd\u003e\n            \u003cdiv class=\"actions-cell\"\u003e\n              \u003cbutton class=\"btn-icon\" title=\"الفاتورة\" onclick=\"openInvoiceModal('${s.trackingNumber}')\"\u003e\u003ci class=\"fa-solid fa-file-invoice\"\u003e\u003c/i\u003e\u003c/button\u003e\n              \u003cbutton class=\"btn-icon\" title=\"تحديث الحالة\" onclick=\"openStatusModal('${s.trackingNumber}')\"\u003e\u003ci class=\"fa-solid fa-route\"\u003e\u003c/i\u003e\u003c/button\u003e\n            \u003c/div\u003e\n          \u003c/td\u003e\n        \u003c/tr\u003e\n      `;\n    });\n  }\n\n  // Render country stats progress bars\n  const countryBreakdown = document.getElementById('dashboard-country-breakdown');\n  countryBreakdown.innerHTML = '';\n\n  // Get active pricing list with shipments mapped\n  const countries = realm.objects('CountryPrice').filtered('isActive == true');\n  \n  // Calculate shipments count per country\n  const countryStats = [];\n  countries.forEach(c =\u003e {\n    const count = shipments.filtered(`destinationCountry == '${c.countryCode}'`).length;\n    if (count \u003e 0) {\n      countryStats.push({\n        name: c.countryName,\n        flag: c.flag,\n        count: count\n      });\n    }\n  });\n\n  // Sort by count descending\n  countryStats.sort((a, b) =\u003e b.count - a.count);\n\n  if (countryStats.length === 0) {\n    countryBreakdown.innerHTML = `\u003cdiv style=\"text-align:center; padding:20px; color:var(--text-secondary); font-size:12px;\"\u003eلا توجد إحصائيات شحنات حالياً بالدول\u003c/div\u003e`;\n  } else {\n    const maxCount = Math.max(...countryStats.map(s =\u003e s.count));\n    countryStats.slice(0, 5).forEach(stat =\u003e {\n      const percentage = (stat.count / totalCount) * 100;\n      countryBreakdown.innerHTML += `\n        \u003cdiv style=\"display:flex; flex-direction:column; gap:6px;\"\u003e\n          \u003cdiv style=\"display:flex; justify-content:space-between; font-size:12px;\"\u003e\n            \u003cspan style=\"font-weight:700;\"\u003e${stat.flag} ${stat.name}\u003c/span\u003e\n            \u003cspan style=\"color:var(--text-secondary); font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${stat.count} شحنات (${percentage.toFixed(0)}%)\u003c/span\u003e\n          \u003c/div\u003e\n          \u003cdiv style=\"width:100%; height:8px; background-color:var(--light-bg); border-radius:4px; overflow:hidden;\"\u003e\n            \u003cdiv style=\"width:${percentage}%; height:100%; background-color:var(--primary-color); border-radius:4px;\"\u003e\u003c/div\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n      `;\n    });\n  }\n}\n\n// ==========================================================================\n// 3. SHIPMENTS LOGIC \u0026 CRUD\n// ==========================================================================\n\nfunction populateShipmentModalCountries() {\n  const select = document.getElementById('shipment-country');\n  const countries = realm.objects('CountryPrice').filtered('isActive == true').sorted('countryName');\n  \n  select.innerHTML = '\u003coption value=\"\"\u003e-- اختر دولة الوجهة --\u003c/option\u003e';\n  countries.forEach(c =\u003e {\n    select.innerHTML += `\u003coption value=\"${c.countryCode}\"\u003e${c.flag} ${c.countryName}\u003c/option\u003e`;\n  });\n}\n\nfunction populateShipmentsCountryFilter() {\n  const select = document.getElementById('shipment-country-filter');\n  const countries = realm.objects('CountryPrice').filtered('isActive == true').sorted('countryName');\n  \n  select.innerHTML = '\u003coption value=\"\"\u003eكل دول أوروبا\u003c/option\u003e';\n  countries.forEach(c =\u003e {\n    select.innerHTML += `\u003coption value=\"${c.countryCode}\"\u003e${c.flag} ${c.countryName}\u003c/option\u003e`;\n  });\n}\n\nfunction renderShipments() {\n  filterShipments();\n}\n\nfunction filterShipments() {\n  const searchQuery = document.getElementById('shipment-search').value.trim();\n  const countryFilter = document.getElementById('shipment-country-filter').value;\n  const statusFilter = document.getElementById('shipment-status-filter').value;\n  \n  let shipments = realm.objects('Shipment');\n\n  // Filter by country\n  if (countryFilter) {\n    shipments = shipments.filtered(`destinationCountry == '${countryFilter}'`);\n  }\n\n  // Filter by status\n  if (statusFilter) {\n    shipments = shipments.filtered(`status == '${statusFilter}'`);\n  }\n\n  // Filter by search text\n  if (searchQuery) {\n    shipments = shipments.filter(s =\u003e \n      s.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||\n      s.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||\n      s.receiverName.toLowerCase().includes(searchQuery.toLowerCase()) ||\n      s.city.toLowerCase().includes(searchQuery.toLowerCase())\n    );\n  } else {\n    // Keep it as RealmResults type for sorting if no JS filter applied\n    shipments = shipments.sorted('createdAt', true);\n  }\n\n  const tableBody = document.getElementById('shipments-table-body');\n  tableBody.innerHTML = '';\n\n  if (shipments.length === 0) {\n    tableBody.innerHTML = `\u003ctr\u003e\u003ctd colspan=\"9\" style=\"text-align:center; padding:40px; color:var(--text-secondary);\"\u003eلا توجد شحنات مطابقة لخيارات البحث المحددة\u003c/td\u003e\u003c/tr\u003e`;\n    return;\n  }\n\n  // If filtered by search, manual sorting\n  if (searchQuery \u0026\u0026 Array.isArray(shipments)) {\n    shipments.sort((a, b) =\u003e new Date(b.createdAt) - new Date(a.createdAt));\n  }\n\n  shipments.forEach(s =\u003e {\n    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];\n    const flag = countryObj ? countryObj.flag : '';\n    const countryName = countryObj ? countryObj.countryName : s.destinationCountry;\n\n    tableBody.innerHTML += `\n      \u003ctr\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:900; color:var(--primary-color);\"\u003e${s.trackingNumber}\u003c/td\u003e\n        \u003ctd style=\"font-size:11px; color:var(--text-secondary);\"\u003e${s.createdAt.split('T')[0]}\u003c/td\u003e\n        \u003ctd\u003e\n          \u003cdiv style=\"font-weight:700;\"\u003e${s.senderName}\u003c/div\u003e\n          \u003cdiv style=\"font-size:11px; color:var(--text-secondary);\"\u003e${s.senderPhone}\u003c/div\u003e\n        \u003c/td\u003e\n        \u003ctd\u003e\n          \u003cdiv style=\"font-weight:700;\"\u003e${s.receiverName}\u003c/div\u003e\n          \u003cdiv style=\"font-size:11px; color:var(--text-secondary);\"\u003e${s.receiverPhone}\u003c/div\u003e\n        \u003c/td\u003e\n        \u003ctd\u003e\n          \u003cdiv class=\"country-item\" style=\"font-weight:700;\"\u003e\n            \u003cspan class=\"country-flag\"\u003e${flag}\u003c/span\u003e\n            \u003cspan\u003e${countryName} - ${s.city}\u003c/span\u003e\n          \u003c/div\u003e\n          \u003cdiv style=\"font-size:11px; color:var(--text-secondary); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;\"\u003e${s.fullAddress}\u003c/div\u003e\n        \u003c/td\u003e\n        \u003ctd\u003e\n          \u003cdiv style=\"font-weight:700;\"\u003e${s.weight} كجم\u003c/div\u003e\n          \u003cdiv style=\"font-size:11px; color:var(--text-secondary);\"\u003e${s.quantity} طرود\u003c/div\u003e\n        \u003c/td\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:800; font-size:14px; color:var(--text-dark);\"\u003e${formatMAD(s.shippingPrice)}\u003c/td\u003e\n        \u003ctd\u003e\u003cspan class=\"badge badge-${s.status}\"\u003e${STATUS_AR[s.status]}\u003c/span\u003e\u003c/td\u003e\n        \u003ctd\u003e\n          \u003cdiv class=\"actions-cell\"\u003e\n            \u003cbutton class=\"btn-icon\" title=\"الفاتورة\" onclick=\"openInvoiceModal('${s.trackingNumber}')\"\u003e\u003ci class=\"fa-solid fa-file-invoice\"\u003e\u003c/i\u003e\u003c/button\u003e\n            \u003cbutton class=\"btn-icon\" title=\"تحديث الحالة\" onclick=\"openStatusModal('${s.trackingNumber}')\"\u003e\u003ci class=\"fa-solid fa-route\"\u003e\u003c/i\u003e\u003c/button\u003e\n            \u003cbutton class=\"btn-icon\" title=\"تعديل\" onclick=\"openEditShipmentModal('${s.trackingNumber}')\"\u003e\u003ci class=\"fa-solid fa-pen-to-square\"\u003e\u003c/i\u003e\u003c/button\u003e\n            \u003cbutton class=\"btn-icon delete\" title=\"حذف الشحنة\" onclick=\"deleteShipmentData('${s.trackingNumber}')\"\u003e\u003ci class=\"fa-solid fa-trash-can\"\u003e\u003c/i\u003e\u003c/button\u003e\n          \u003c/div\u003e\n        \u003c/td\u003e\n      \u003c/tr\u003e\n    `;\n  });\n}\n\nfunction openNewShipmentModal() {\n  currentEditingShipment = null;\n  document.getElementById('shipment-modal-title').textContent = 'تسجيل طرد شحن جديد';\n  \n  // Generate code\n  const newCode = generateTrackingNumber();\n  document.getElementById('shipment-tracking-display').textContent = newCode;\n  \n  // Load clients in dropdown\n  populateCustomersDropdown('shipment-sender-select');\n\n  // Reset form\n  document.getElementById('shipment-form').reset();\n  document.getElementById('shipment-edit-id').value = '';\n  document.getElementById('shipment-price').value = '';\n  document.getElementById('price-calc-hint').textContent = 'قم باختيار الدولة وتحديد الوزن لحساب التسعير';\n  \n  document.getElementById('shipment-modal').showModal();\n}\n\nfunction openEditShipmentModal(trackingNumber) {\n  const shipment = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];\n  if (!shipment) return;\n\n  currentEditingShipment = shipment;\n  document.getElementById('shipment-modal-title').textContent = 'تعديل بيانات الشحنة';\n  document.getElementById('shipment-tracking-display').textContent = shipment.trackingNumber;\n\n  // Load clients\n  populateCustomersDropdown('shipment-sender-select', shipment.senderCustomerId);\n\n  // Fill details\n  document.getElementById('shipment-edit-id').value = shipment.trackingNumber;\n  document.getElementById('shipment-sender-name').value = shipment.senderName;\n  document.getElementById('shipment-sender-phone').value = shipment.senderPhone;\n  document.getElementById('shipment-receiver-name').value = shipment.receiverName;\n  document.getElementById('shipment-receiver-phone').value = shipment.receiverPhone;\n  document.getElementById('shipment-country').value = shipment.destinationCountry;\n  document.getElementById('shipment-city').value = shipment.city;\n  document.getElementById('shipment-address').value = shipment.fullAddress;\n  document.getElementById('shipment-quantity').value = shipment.quantity;\n  document.getElementById('shipment-weight').value = shipment.weight;\n  document.getElementById('shipment-price').value = shipment.shippingPrice;\n  document.getElementById('shipment-status').value = shipment.status;\n  document.getElementById('shipment-notes').value = shipment.notes || '';\n\n  document.getElementById('price-calc-hint').textContent = 'سعر الشحن المعتمد لهذه الشحنة حالياً';\n\n  document.getElementById('shipment-modal').showModal();\n}\n\nfunction populateCustomersDropdown(selectId, selectedValue = '') {\n  const select = document.getElementById(selectId);\n  const customers = realm.objects('Customer').sorted('name');\n  \n  select.innerHTML = '\u003coption value=\"\"\u003e-- اختر عميلاً مرسلاً --\u003c/option\u003e';\n  customers.forEach(c =\u003e {\n    const selected = c.id === selectedValue ? 'selected' : '';\n    select.innerHTML += `\u003coption value=\"${c.id}\" ${selected}\u003e${c.name} (${c.phone})\u003c/option\u003e`;\n  });\n}\n\nfunction autoFillSenderInfo() {\n  const select = document.getElementById('shipment-sender-select');\n  const customerId = select.value;\n  \n  const nameInput = document.getElementById('shipment-sender-name');\n  const phoneInput = document.getElementById('shipment-sender-phone');\n\n  if (customerId) {\n    const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];\n    if (cust) {\n      nameInput.value = cust.name;\n      phoneInput.value = cust.phone;\n    }\n  } else {\n    nameInput.value = '';\n    phoneInput.value = '';\n  }\n}\n\nfunction calculateShippingPrice() {\n  const countryCode = document.getElementById('shipment-country').value;\n  const weightVal = parseFloat(document.getElementById('shipment-weight').value) || 0;\n  const quantityVal = parseInt(document.getElementById('shipment-quantity').value) || 1;\n  const priceInput = document.getElementById('shipment-price');\n  const calcHint = document.getElementById('price-calc-hint');\n\n  if (!countryCode || weightVal \u003c= 0) {\n    return;\n  }\n\n  // Get country price metrics from Realm DB\n  const rate = realm.objects('CountryPrice').filtered(`countryCode == '${countryCode}'`)[0];\n  if (!rate) return;\n\n  // Pricing Rule: Base Price covers the first package, additional weights add cost per Kg\n  // Surcharge of 10% per additional package if quantity \u003e 1\n  let finalPrice = rate.basePrice + (weightVal * rate.pricePerKg);\n  if (quantityVal \u003e 1) {\n    finalPrice += (quantityVal - 1) * 15; // flat 15 DH for each extra package\n  }\n\n  finalPrice = Math.round(finalPrice);\n  priceInput.value = finalPrice;\n  calcHint.textContent = `السعر التلقائي: الأساسي (${rate.basePrice} DH) + الوزن (${rate.pricePerKg} DH/كجم) + الطرود الإضافية.`;\n}\n\nfunction saveShipmentData() {\n  const editId = document.getElementById('shipment-edit-id').value;\n  const senderId = document.getElementById('shipment-sender-select').value;\n  const senderName = document.getElementById('shipment-sender-name').value;\n  const senderPhone = document.getElementById('shipment-sender-phone').value;\n  \n  const receiverName = document.getElementById('shipment-receiver-name').value.trim();\n  const receiverPhone = document.getElementById('shipment-receiver-phone').value.trim();\n  const destinationCountry = document.getElementById('shipment-country').value;\n  const city = document.getElementById('shipment-city').value.trim();\n  const fullAddress = document.getElementById('shipment-address').value.trim();\n  const quantity = parseInt(document.getElementById('shipment-quantity').value) || 1;\n  const weight = parseFloat(document.getElementById('shipment-weight').value) || 1;\n  const shippingPrice = parseFloat(document.getElementById('shipment-price').value) || 0;\n  const status = document.getElementById('shipment-status').value;\n  const notes = document.getElementById('shipment-notes').value.trim();\n\n  let trackingNumber = editId;\n\n  realm.write(() =\u003e {\n    if (editId) {\n      // Edit\n      const s = realm.objects('Shipment').filtered(`trackingNumber == '${editId}'`)[0];\n      if (s) {\n        // If status changed, push to history logs\n        if (s.status !== status) {\n          s.statusHistory.push({\n            status: status,\n            date: new Date().toISOString(),\n            note: 'تم تعديل تفاصيل الحالة'\n          });\n        }\n        \n        s.receiverName = receiverName;\n        s.receiverPhone = receiverPhone;\n        s.destinationCountry = destinationCountry;\n        s.city = city;\n        s.fullAddress = fullAddress;\n        s.quantity = quantity;\n        s.weight = weight;\n        s.shippingPrice = shippingPrice;\n        s.status = status;\n        s.notes = notes;\n      }\n    } else {\n      // New\n      trackingNumber = document.getElementById('shipment-tracking-display').textContent;\n      \n      const newShipment = {\n        trackingNumber: trackingNumber,\n        senderName: senderName,\n        senderPhone: senderPhone,\n        senderCustomerId: senderId,\n        receiverName: receiverName,\n        receiverPhone: receiverPhone,\n        destinationCountry: destinationCountry,\n        city: city,\n        fullAddress: fullAddress,\n        weight: weight,\n        quantity: quantity,\n        shippingPrice: shippingPrice,\n        status: status,\n        createdAt: new Date().toISOString(),\n        statusHistory: [{\n          status: status,\n          date: new Date().toISOString(),\n          note: 'تسجيل الشحنة بالمستودع'\n        }],\n        notes: notes\n      };\n      \n      realm.create('Shipment', newShipment);\n\n      // Increment customer's shipmentsCount\n      const customerObj = realm.objects('Customer').filtered(`id == '${senderId}'`)[0];\n      if (customerObj) {\n        customerObj.shipmentsCount += 1;\n      }\n\n      // Also create an invoice automatically for the client\n      const invoiceNum = `FAC-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${trackingNumber.slice(-4)}`;\n      const newInvoice = {\n        invoiceNumber: invoiceNum,\n        shipmentTrackingNumber: trackingNumber,\n        customerId: senderId,\n        customerName: senderName,\n        totalAmount: shippingPrice,\n        paymentStatus: 'paid', // Default paid on receipt\n        paymentMethod: 'cash',\n        createdAt: new Date().toISOString()\n      };\n      realm.create('Invoice', newInvoice);\n    }\n  });\n\n  document.getElementById('shipment-modal').close();\n  \n  // Refresh views\n  if (currentView === 'dashboard') {\n    renderDashboard();\n  } else if (currentView === 'shipments') {\n    renderShipments();\n  }\n}\n\nfunction deleteShipmentData(trackingNumber) {\n  if (confirm(`هل أنت متأكد من حذف الشحنة رقم ${trackingNumber} نهائياً من قاعدة البيانات؟`)) {\n    const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];\n    if (s) {\n      realm.write(() =\u003e {\n        // Decrement client shipmentsCount\n        const customerObj = realm.objects('Customer').filtered(`id == '${s.senderCustomerId}'`)[0];\n        if (customerObj \u0026\u0026 customerObj.shipmentsCount \u003e 0) {\n          customerObj.shipmentsCount -= 1;\n        }\n\n        // Delete linked invoice\n        const invoices = realm.objects('Invoice').filtered(`shipmentTrackingNumber == '${trackingNumber}'`);\n        realm.delete(invoices);\n\n        // Delete shipment\n        realm.delete(s);\n      });\n      \n      if (currentView === 'dashboard') {\n        renderDashboard();\n      } else if (currentView === 'shipments') {\n        renderShipments();\n      }\n    }\n  }\n}\n\n// ==========================================================================\n// 4. SHIPMENTS STATUS HISTORY UPDATE\n// ==========================================================================\n\nfunction openStatusModal(trackingNumber) {\n  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];\n  if (!s) return;\n\n  document.getElementById('status-update-tracking').value = trackingNumber;\n  document.getElementById('status-update-select').value = s.status;\n  document.getElementById('status-update-note').value = '';\n\n  document.getElementById('status-modal').showModal();\n}\n\nfunction saveStatusUpdate() {\n  const trackingNumber = document.getElementById('status-update-tracking').value;\n  const newStatus = document.getElementById('status-update-select').value;\n  const noteText = document.getElementById('status-update-note').value.trim() || 'تحديث روتيني لحالة الشحن';\n\n  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];\n  if (s) {\n    realm.write(() =\u003e {\n      s.status = newStatus;\n      s.statusHistory.push({\n        status: newStatus,\n        date: new Date().toISOString(),\n        note: noteText\n      });\n    });\n  }\n\n  document.getElementById('status-modal').close();\n\n  if (currentView === 'dashboard') {\n    renderDashboard();\n  } else if (currentView === 'shipments') {\n    renderShipments();\n  }\n}\n\n// ==========================================================================\n// 5. CUSTOMERS PANEL \u0026 HISTORY\n// ==========================================================================\n\nfunction renderCustomers() {\n  filterCustomers();\n}\n\nfunction filterCustomers() {\n  const searchQuery = document.getElementById('customer-search').value.trim();\n  let customers = realm.objects('Customer');\n\n  if (searchQuery) {\n    customers = customers.filter(c =\u003e \n      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||\n      c.phone.includes(searchQuery) ||\n      c.moroccoId.toLowerCase().includes(searchQuery.toLowerCase())\n    );\n  } else {\n    customers = customers.sorted('name');\n  }\n\n  const tableBody = document.getElementById('customers-table-body');\n  tableBody.innerHTML = '';\n\n  if (customers.length === 0) {\n    tableBody.innerHTML = `\u003ctr\u003e\u003ctd colspan=\"9\" style=\"text-align:center; padding:40px; color:var(--text-secondary);\"\u003eلا توجد عملاء مسجلين يطابقون مدخلات البحث\u003c/td\u003e\u003c/tr\u003e`;\n    return;\n  }\n\n  customers.forEach(c =\u003e {\n    tableBody.innerHTML += `\n      \u003ctr\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${c.id}\u003c/td\u003e\n        \u003ctd\u003e\u003cstrong\u003e${c.name}\u003c/strong\u003e\u003c/td\u003e\n        \u003ctd style=\"direction:ltr; text-align:right;\"\u003e${c.phone}\u003c/td\u003e\n        \u003ctd\u003e${c.email || '\u003cspan style=\"color:var(--text-secondary);\"\u003e--\u003c/span\u003e'}\u003c/td\u003e\n        \u003ctd style=\"max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;\"\u003e${c.address || '\u003cspan style=\"color:var(--text-secondary);\"\u003e--\u003c/span\u003e'}\u003c/td\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${c.moroccoId}\u003c/td\u003e\n        \u003ctd style=\"font-size:11px; color:var(--text-secondary);\"\u003e${c.createdAt.split('T')[0]}\u003c/td\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${c.shipmentsCount} شحنات\u003c/td\u003e\n        \u003ctd\u003e\n          \u003cdiv class=\"actions-cell\"\u003e\n            \u003cbutton class=\"btn-icon\" title=\"سجل الشحنات\" onclick=\"openCustomerHistory('${c.id}')\"\u003e\u003ci class=\"fa-solid fa-list-check\"\u003e\u003c/i\u003e\u003c/button\u003e\n            \u003cbutton class=\"btn-icon\" title=\"تعديل\" onclick=\"openEditCustomerModal('${c.id}')\"\u003e\u003ci class=\"fa-solid fa-pen-to-square\"\u003e\u003c/i\u003e\u003c/button\u003e\n            \u003cbutton class=\"btn-icon delete\" title=\"حذف العميل\" onclick=\"deleteCustomerData('${c.id}')\"\u003e\u003ci class=\"fa-solid fa-user-xmark\"\u003e\u003c/i\u003e\u003c/button\u003e\n          \u003c/div\u003e\n        \u003c/td\u003e\n      \u003c/tr\u003e\n    `;\n  });\n}\n\nfunction openNewCustomerModal() {\n  currentEditingCustomer = null;\n  document.getElementById('customer-modal-title').textContent = 'إضافة عميل جديد بالوكالة';\n  document.getElementById('customer-form').reset();\n  document.getElementById('customer-edit-id').value = '';\n  document.getElementById('customer-modal').showModal();\n}\n\nfunction openEditCustomerModal(customerId) {\n  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];\n  if (!cust) return;\n\n  currentEditingCustomer = cust;\n  document.getElementById('customer-modal-title').textContent = 'تعديل بيانات العميل';\n  \n  document.getElementById('customer-edit-id').value = cust.id;\n  document.getElementById('customer-name').value = cust.name;\n  document.getElementById('customer-phone').value = cust.phone;\n  document.getElementById('customer-email').value = cust.email || '';\n  document.getElementById('customer-morocco-id').value = cust.moroccoId;\n  document.getElementById('customer-address').value = cust.address || '';\n\n  document.getElementById('customer-modal').showModal();\n}\n\nfunction saveCustomerData() {\n  const editId = document.getElementById('customer-edit-id').value;\n  const name = document.getElementById('customer-name').value.trim();\n  const phone = document.getElementById('customer-phone').value.trim();\n  const email = document.getElementById('customer-email').value.trim();\n  const moroccoId = document.getElementById('customer-morocco-id').value.trim().toUpperCase();\n  const address = document.getElementById('customer-address').value.trim();\n\n  realm.write(() =\u003e {\n    if (editId) {\n      // Edit Customer\n      const cust = realm.objects('Customer').filtered(`id == '${editId}'`)[0];\n      if (cust) {\n        // Cascaded update in shipments name \u0026 phone\n        const linkedShipments = realm.objects('Shipment').filtered(`senderCustomerId == '${editId}'`);\n        linkedShipments.forEach(s =\u003e {\n          s.senderName = name;\n          s.senderPhone = phone;\n        });\n\n        const linkedInvoices = realm.objects('Invoice').filtered(`customerId == '${editId}'`);\n        linkedInvoices.forEach(inv =\u003e {\n          inv.customerName = name;\n        });\n\n        cust.name = name;\n        cust.phone = phone;\n        cust.email = email;\n        cust.moroccoId = moroccoId;\n        cust.address = address;\n      }\n    } else {\n      // Create Customer\n      const newCust = {\n        id: generateCustomerID(),\n        name: name,\n        phone: phone,\n        email: email,\n        address: address,\n        moroccoId: moroccoId,\n        createdAt: new Date().toISOString(),\n        shipmentsCount: 0\n      };\n      \n      realm.create('Customer', newCust);\n    }\n  });\n\n  document.getElementById('customer-modal').close();\n  \n  if (currentView === 'customers') {\n    renderCustomers();\n  }\n}\n\nfunction deleteCustomerData(customerId) {\n  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];\n  if (!cust) return;\n\n  if (cust.shipmentsCount \u003e 0) {\n    alert(`لا يمكن حذف هذا العميل نظراً لوجود عدد (${cust.shipmentsCount}) شحنات مسجلة باسمه في النظام.`);\n    return;\n  }\n\n  if (confirm(`هل أنت متأكد من حذف العميل \"${cust.name}\" بالكامل من قاعدة البيانات؟`)) {\n    realm.write(() =\u003e {\n      realm.delete(cust);\n    });\n    renderCustomers();\n  }\n}\n\nfunction openCustomerHistory(customerId) {\n  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];\n  if (!cust) return;\n\n  document.getElementById('history-modal-title').textContent = `سجل شحنات العميل: ${cust.name}`;\n\n  const shipments = realm.objects('Shipment').filtered(`senderCustomerId == '${customerId}'`).sorted('createdAt', true);\n  const tableBody = document.getElementById('history-table-body');\n  tableBody.innerHTML = '';\n\n  if (shipments.length === 0) {\n    tableBody.innerHTML = `\u003ctr\u003e\u003ctd colspan=\"7\" style=\"text-align:center; padding:30px; color:var(--text-secondary);\"\u003eلا توجد شحنات سابقة مسجلة باسم هذا العميل\u003c/td\u003e\u003c/tr\u003e`;\n  } else {\n    shipments.forEach(s =\u003e {\n      const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];\n      const flag = countryObj ? countryObj.flag : '';\n      const countryName = countryObj ? countryObj.countryName : s.destinationCountry;\n\n      tableBody.innerHTML += `\n        \u003ctr\u003e\n          \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700; color:var(--primary-color);\"\u003e${s.trackingNumber}\u003c/td\u003e\n          \u003ctd style=\"font-size:11px;\"\u003e${s.createdAt.split('T')[0]}\u003c/td\u003e\n          \u003ctd\u003e\u003cstrong\u003e${s.receiverName}\u003c/strong\u003e\u003c/td\u003e\n          \u003ctd\u003e${flag} ${countryName}\u003c/td\u003e\n          \u003ctd\u003e${s.weight} كجم\u003c/td\u003e\n          \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${formatMAD(s.shippingPrice)}\u003c/td\u003e\n          \u003ctd\u003e\u003cspan class=\"badge badge-${s.status}\"\u003e${STATUS_AR[s.status]}\u003c/span\u003e\u003c/td\u003e\n        \u003c/tr\u003e\n      `;\n    });\n  }\n\n  document.getElementById('history-modal').showModal();\n}\n\n// ==========================================================================\n// 6. PRICING SETTINGS LOGIC\n// ==========================================================================\n\nfunction renderPricingSettings() {\n  filterPricingList();\n}\n\nfunction filterPricingList() {\n  const searchQuery = document.getElementById('pricing-search').value.trim();\n  let countries = realm.objects('CountryPrice');\n\n  if (searchQuery) {\n    countries = countries.filter(c =\u003e \n      c.countryName.toLowerCase().includes(searchQuery.toLowerCase()) ||\n      c.countryCode.toLowerCase().includes(searchQuery.toLowerCase())\n    );\n  } else {\n    countries = countries.sorted('countryName');\n  }\n\n  const container = document.getElementById('country-pricing-list-container');\n  container.innerHTML = '';\n\n  if (countries.length === 0) {\n    container.innerHTML = `\u003cdiv style=\"text-align:center; padding:30px; color:var(--text-secondary);\"\u003eلا توجد دول مطابقة لمدخلات البحث\u003c/div\u003e`;\n    return;\n  }\n\n  countries.forEach(c =\u003e {\n    container.innerHTML += `\n      \u003cdiv class=\"pricing-row\" id=\"pricing-row-${c.countryCode}\"\u003e\n        \u003cdiv class=\"country-details\"\u003e\n          \u003cspan style=\"font-size:24px;\"\u003e${c.flag}\u003c/span\u003e\n          \u003cdiv\u003e\n            \u003cdiv style=\"font-weight:800; font-size:14px;\"\u003e${c.countryName}\u003c/div\u003e\n            \u003cspan style=\"font-size:10px; font-family:'Estedad', sans-serif; background-color:#eaeaea; padding:2px 6px; border-radius:4px;\"\u003e${c.countryCode}\u003c/span\u003e\n          \u003c/div\u003e\n        \u003c/div\u003e\n        \n        \u003cdiv class=\"pricing-inputs\"\u003e\n          \u003cdiv class=\"mini-input-group\"\u003e\n            \u003clabel\u003eالتعرفة الأساسية (DH)\u003c/label\u003e\n            \u003cinput type=\"number\" id=\"base-price-${c.countryCode}\" class=\"mini-input\" value=\"${c.basePrice}\"\u003e\n          \u003c/div\u003e\n          \n          \u003cdiv class=\"mini-input-group\"\u003e\n            \u003clabel\u003eسعر الكيلو الإضافي (DH)\u003c/label\u003e\n            \u003cinput type=\"number\" id=\"per-kg-${c.countryCode}\" class=\"mini-input\" value=\"${c.pricePerKg}\"\u003e\n          \u003c/div\u003e\n          \n          \u003cbutton class=\"btn-primary\" style=\"padding: 8px 16px; font-size:11px;\" onclick=\"saveCountryPriceRate('${c.countryCode}')\"\u003e\n            \u003ci class=\"fa-solid fa-floppy-disk\"\u003e\u003c/i\u003e حفظ\n          \u003c/button\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n    `;\n  });\n}\n\nfunction saveCountryPriceRate(countryCode) {\n  const basePriceVal = parseFloat(document.getElementById(`base-price-${countryCode}`).value) || 0;\n  const perKgVal = parseFloat(document.getElementById(`per-kg-${countryCode}`).value) || 0;\n\n  const rate = realm.objects('CountryPrice').filtered(`countryCode == '${countryCode}'`)[0];\n  if (rate) {\n    realm.write(() =\u003e {\n      rate.basePrice = basePriceVal;\n      rate.pricePerKg = perKgVal;\n    });\n\n    // Subtle micro feedback alert\n    const row = document.getElementById(`pricing-row-${countryCode}`);\n    row.style.borderColor = 'var(--color-success)';\n    row.style.backgroundColor = '#e8f5e9';\n    \n    setTimeout(() =\u003e {\n      row.style.borderColor = 'var(--border-light)';\n      row.style.backgroundColor = 'var(--light-bg)';\n    }, 1500);\n  }\n}\n\n// ==========================================================================\n// 7. INVOICE GENERATOR \u0026 PRINT LAYOUT\n// ==========================================================================\n\nfunction openInvoiceModal(trackingNumber) {\n  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];\n  if (!s) return;\n\n  const invoice = realm.objects('Invoice').filtered(`shipmentTrackingNumber == '${trackingNumber}'`)[0];\n  const invoiceNum = invoice ? invoice.invoiceNumber : `FAC-TEMP-${trackingNumber.slice(-4)}`;\n\n  const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];\n  const flag = countryObj ? countryObj.flag : '';\n  const countryName = countryObj ? countryObj.countryName : s.destinationCountry;\n\n  const invoicePrintArea = document.getElementById('invoice-print-area');\n  \n  invoicePrintArea.innerHTML = `\n    \u003cdiv class=\"invoice-header\"\u003e\n      \u003cdiv class=\"invoice-logo-section\"\u003e\n        \u003cdiv class=\"invoice-logo\"\u003e\n          \u003ci class=\"fa-solid fa-paper-plane\"\u003e\u003c/i\u003e\n        \u003c/div\u003e\n        \u003cdiv\u003e\n          \u003ch1 class=\"invoice-company-name\"\u003eوكالة أطلس إكسبريس\u003c/h1\u003e\n          \u003cp class=\"invoice-company-sub\"\u003eلنقل الطرود والشحنات الدولية نحو أوروبا\u003c/p\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"invoice-meta\"\u003e\n        \u003ch2 class=\"invoice-title-text\"\u003eوصل شحن طرد\u003c/h2\u003e\n        \u003cdiv class=\"invoice-number\"\u003eرقم الفاتورة: \u003cspan style=\"font-family:'Estedad', sans-serif;\"\u003e${invoiceNum}\u003c/span\u003e\u003c/div\u003e\n        \u003cdiv class=\"invoice-date\"\u003eتاريخ الإرسال: ${s.createdAt.split('T')[0]}\u003c/div\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv class=\"invoice-parties\"\u003e\n      \u003cdiv class=\"party-box\"\u003e\n        \u003cdiv class=\"party-title\"\u003eالمرسل (المغرب)\u003c/div\u003e\n        \u003cdiv class=\"party-name\"\u003e${s.senderName}\u003c/div\u003e\n        \u003cdiv class=\"party-details\"\u003e\n          \u003cspan\u003eالهاتف: ${s.senderPhone}\u003c/span\u003e\n          \u003cspan\u003eالهوية الوطنية: ${s.notes || '--'}\u003c/span\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n\n      \u003cdiv class=\"party-box\"\u003e\n        \u003cdiv class=\"party-title\"\u003eالمستلم (أوروبا)\u003c/div\u003e\n        \u003cdiv class=\"party-name\"\u003e${s.receiverName}\u003c/div\u003e\n        \u003cdiv class=\"party-details\"\u003e\n          \u003cspan\u003eالبلد: ${flag} ${countryName}\u003c/span\u003e\n          \u003cspan\u003eالمدينة: ${s.city}\u003c/span\u003e\n          \u003cspan\u003eالهاتف: ${s.receiverPhone}\u003c/span\u003e\n          \u003cspan\u003eالعنوان: ${s.fullAddress}\u003c/span\u003e\n        \u003c/div\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003ctable class=\"invoice-table\"\u003e\n      \u003cthead\u003e\n        \u003ctr\u003e\n          \u003cth\u003eتفاصيل الشحنة والخدمة\u003c/th\u003e\n          \u003cth style=\"text-align:center;\"\u003eالوزن\u003c/th\u003e\n          \u003cth style=\"text-align:center;\"\u003eعدد الطرود\u003c/th\u003e\n          \u003cth style=\"text-align:left;\"\u003eالمبلغ الفرعي\u003c/th\u003e\n        \u003c/tr\u003e\n      \u003c/thead\u003e\n      \u003ctbody\u003e\n        \u003ctr\u003e\n          \u003ctd\u003e\n            \u003cstrong\u003eشحن دولي جوي وبري سريع\u003c/strong\u003e\u003cbr\u003e\n            \u003cspan style=\"font-size:11px; color:#555;\"\u003eمن المغرب نحو ${countryName} (رقم التتبع: ${s.trackingNumber})\u003c/span\u003e\n          \u003c/td\u003e\n          \u003ctd style=\"text-align:center; font-family:'Estedad', sans-serif;\"\u003e${s.weight} كجم\u003c/td\u003e\n          \u003ctd style=\"text-align:center; font-family:'Estedad', sans-serif;\"\u003e${s.quantity}\u003c/td\u003e\n          \u003ctd style=\"text-align:left; font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${formatMAD(s.shippingPrice)}\u003c/td\u003e\n        \u003c/tr\u003e\n      \u003c/tbody\u003e\n    \u003c/table\u003e\n\n    \u003cdiv class=\"invoice-totals\"\u003e\n      \u003cdiv class=\"total-row\"\u003e\n        \u003cspan\u003eالسعر الخاضع للضريبة:\u003c/span\u003e\n        \u003cspan style=\"font-family:'Estedad', sans-serif;\"\u003e${formatMAD(s.shippingPrice * 0.8)}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"total-row\"\u003e\n        \u003cspan\u003eالضريبة المضافة (20%):\u003c/span\u003e\n        \u003cspan style=\"font-family:'Estedad', sans-serif;\"\u003e${formatMAD(s.shippingPrice * 0.2)}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"total-row grand-total\"\u003e\n        \u003cspan\u003eالمجموع الإجمالي:\u003c/span\u003e\n        \u003cspan style=\"font-family:'Estedad', sans-serif;\"\u003e${formatMAD(s.shippingPrice)}\u003c/span\u003e\n      \u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv style=\"background-color:#e8f5e9; border:1px solid #c8e6c9; border-radius:8px; padding:12px; margin-bottom:30px; text-align:center; font-weight:700; color:#2e7d32; display:flex; align-items:center; justify-content:center; gap:8px;\"\u003e\n      \u003ci class=\"fa-solid fa-circle-check\"\u003e\u003c/i\u003e تم تسديد ثمن الشحن بالكامل بالدرهم المغربي (DH)\n    \u003c/div\u003e\n\n    \u003cdiv class=\"invoice-footer\"\u003e\n      \u003cp\u003eشكراً لثقتكم بوكالة أطلس للشحن الدولي. لأي استفسار يرجى التواصل عبر الرقم الموحد بالوكالة.\u003c/p\u003e\n      \u003cp style=\"margin-top:6px; font-size:10px; color:#a1a1a6;\"\u003eAtlas Cargo System - Realm DB Offline Engine v2.1\u003c/p\u003e\n    \u003c/div\u003e\n  `;\n\n  document.getElementById('invoice-modal').showModal();\n}\n\n// ==========================================================================\n// 8. FINANCIAL REPORTS \u0026 EXCEL EXPORTS\n// ==========================================================================\n\nfunction updateReportDateInputs() {\n  const type = document.getElementById('report-type').value;\n  \n  document.getElementById('report-date-container').style.display = type === 'daily' ? 'block' : 'none';\n  document.getElementById('report-month-container').style.display = type === 'monthly' ? 'block' : 'none';\n  document.getElementById('report-year-container').style.display = type === 'yearly' ? 'block' : 'none';\n\n  generateReportData();\n}\n\nfunction generateReportData() {\n  const type = document.getElementById('report-type').value;\n  const shipments = realm.objects('Shipment');\n  let filtered = [];\n  let periodName = '';\n\n  if (type === 'daily') {\n    const dateVal = document.getElementById('report-date-input').value;\n    if (!dateVal) return;\n    filtered = shipments.filter(s =\u003e s.createdAt.startsWith(dateVal));\n    periodName = `ليوم: ${dateVal}`;\n  } else if (type === 'monthly') {\n    const monthVal = document.getElementById('report-month-input').value; // YYYY-MM\n    if (!monthVal) return;\n    filtered = shipments.filter(s =\u003e s.createdAt.startsWith(monthVal));\n    periodName = `لشهر: ${monthVal}`;\n  } else if (type === 'yearly') {\n    const yearVal = document.getElementById('report-year-input').value;\n    filtered = shipments.filter(s =\u003e s.createdAt.startsWith(yearVal));\n    periodName = `لسنة: ${yearVal}`;\n  }\n\n  // Filter out cancelled shipments from revenue, but count them in logs\n  const activeShipments = filtered.filter(s =\u003e s.status !== 'cancelled');\n  \n  const totalCount = filtered.length;\n  const deliveredCount = filtered.filter(s =\u003e s.status === 'delivered').length;\n  const activeCount = activeShipments.length;\n  const cancelledCount = filtered.filter(s =\u003e s.status === 'cancelled').length;\n\n  const totalWeight = activeShipments.reduce((sum, s) =\u003e sum + s.weight, 0);\n  const grossBilling = activeShipments.reduce((sum, s) =\u003e sum + s.shippingPrice, 0);\n  \n  // Simulated Net Profit: 35% of total gross billing (deducting travel charges and custom clearances)\n  const estimatedProfit = grossBilling * 0.35;\n\n  // Render Summary KPI cards\n  const summaryGrid = document.getElementById('report-summary-cards');\n  summaryGrid.innerHTML = `\n    \u003cdiv class=\"kpi-card\"\u003e\n      \u003cdiv class=\"kpi-info\"\u003e\n        \u003cspan class=\"kpi-title\"\u003eالشحنات بالتقرير\u003c/span\u003e\n        \u003cspan class=\"kpi-value\"\u003e${totalCount} شحنات\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"kpi-icon kpi-all\"\u003e\u003ci class=\"fa-solid fa-boxes-stacked\"\u003e\u003c/i\u003e\u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv class=\"kpi-card\"\u003e\n      \u003cdiv class=\"kpi-info\"\u003e\n        \u003cspan class=\"kpi-title\"\u003eالوزن الإجمالي المشحون\u003c/span\u003e\n        \u003cspan class=\"kpi-value\"\u003e${totalWeight.toFixed(1)} كجم\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"kpi-icon kpi-transit\"\u003e\u003ci class=\"fa-solid fa-weight-scale\"\u003e\u003c/i\u003e\u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv class=\"kpi-card\"\u003e\n      \u003cdiv class=\"kpi-info\"\u003e\n        \u003cspan class=\"kpi-title\"\u003eمداخيل الشحن (MAD)\u003c/span\u003e\n        \u003cspan class=\"kpi-value\"\u003e${formatMAD(grossBilling)}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"kpi-icon kpi-delivered\"\u003e\u003ci class=\"fa-solid fa-chart-line\"\u003e\u003c/i\u003e\u003c/div\u003e\n    \u003c/div\u003e\n\n    \u003cdiv class=\"kpi-card\"\u003e\n      \u003cdiv class=\"kpi-info\"\u003e\n        \u003cspan class=\"kpi-title\"\u003eصافي الأرباح المقدرة (35%)\u003c/span\u003e\n        \u003cspan class=\"kpi-value\" style=\"color:var(--color-success);\"\u003e${formatMAD(estimatedProfit)}\u003c/span\u003e\n      \u003c/div\u003e\n      \u003cdiv class=\"kpi-icon kpi-revenue\"\u003e\u003ci class=\"fa-solid fa-hand-holding-dollar\"\u003e\u003c/i\u003e\u003c/div\u003e\n    \u003c/div\u003e\n  `;\n\n  // Render Table Body\n  const tableBody = document.getElementById('report-table-body');\n  tableBody.innerHTML = '';\n\n  if (filtered.length === 0) {\n    tableBody.innerHTML = `\u003ctr\u003e\u003ctd colspan=\"8\" style=\"text-align:center; padding:30px; color:var(--text-secondary);\"\u003eلا توجد شحنات مسجلة في هذا النطاق الزمني\u003c/td\u003e\u003c/tr\u003e`;\n    return;\n  }\n\n  filtered.forEach(s =\u003e {\n    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];\n    const flag = countryObj ? countryObj.flag : '';\n    const countryName = countryObj ? countryObj.countryName : s.destinationCountry;\n\n    tableBody.innerHTML += `\n      \u003ctr\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${s.trackingNumber}\u003c/td\u003e\n        \u003ctd\u003e${s.createdAt.split('T')[0]}\u003c/td\u003e\n        \u003ctd\u003e\u003cstrong\u003e${s.senderName}\u003c/strong\u003e\u003c/td\u003e\n        \u003ctd\u003e${s.receiverName}\u003c/td\u003e\n        \u003ctd\u003e${flag} ${countryName} - ${s.city}\u003c/td\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif;\"\u003e${s.weight} كجم\u003c/td\u003e\n        \u003ctd style=\"font-family:'Estedad', sans-serif; font-weight:700;\"\u003e${formatMAD(s.shippingPrice)}\u003c/td\u003e\n        \u003ctd\u003e\u003cspan class=\"badge badge-${s.status}\"\u003e${STATUS_AR[s.status]}\u003c/span\u003e\u003c/td\u003e\n      \u003c/tr\u003e\n    `;\n  });\n}\n\nfunction printReport() {\n  window.print();\n}\n\nfunction exportReportToCSV() {\n  const type = document.getElementById('report-type').value;\n  let title = `تقرير_نشاط_وكالة_أطلس_${type}`;\n\n  const rows = [\n    ['رقم التتبع', 'تاريخ الشحن', 'اسم المرسل', 'رقم المرسل', 'اسم المستلم', 'بلد الوجهة', 'المدينة', 'الوزن (كجم)', 'سعر الشحن (درهم)', 'حالة الشحنة']\n  ];\n\n  // Query matching shipments\n  const shipments = realm.objects('Shipment');\n  let filtered = [];\n\n  if (type === 'daily') {\n    const dateVal = document.getElementById('report-date-input').value;\n    filtered = shipments.filter(s =\u003e s.createdAt.startsWith(dateVal));\n    title += `_${dateVal}`;\n  } else if (type === 'monthly') {\n    const monthVal = document.getElementById('report-month-input').value;\n    filtered = shipments.filter(s =\u003e s.createdAt.startsWith(monthVal));\n    title += `_${monthVal}`;\n  } else if (type === 'yearly') {\n    const yearVal = document.getElementById('report-year-input').value;\n    filtered = shipments.filter(s =\u003e s.createdAt.startsWith(yearVal));\n    title += `_${yearVal}`;\n  }\n\n  if (filtered.length === 0) {\n    alert('لا توجد بيانات لتصديرها بالتقرير المختار');\n    return;\n  }\n\n  filtered.forEach(s =\u003e {\n    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];\n    const countryName = countryObj ? countryObj.countryName : s.destinationCountry;\n\n    rows.push([\n      s.trackingNumber,\n      s.createdAt.split('T')[0],\n      s.senderName,\n      s.senderPhone,\n      s.receiverName,\n      countryName,\n      s.city,\n      s.weight,\n      s.shippingPrice,\n      STATUS_AR[s.status]\n    ]);\n  });\n\n  // Convert array to CSV string. Use UTF-8 BOM so Excel opens Arabic correctly\n  let csvContent = '\\uFEFF'; // UTF-8 BOM\n  rows.forEach(rowArray =\u003e {\n    // Escape double quotes and wrap in quotes to preserve commas/newlines\n    const row = rowArray.map(val =\u003e `\"${String(val).replace(/\"/g, '\"\"')}\"`).join(',');\n    csvContent += row + '\\r\\n';\n  });\n\n  // Download logic\n  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });\n  const url = URL.createObjectURL(blob);\n  const link = document.createElement('a');\n  link.setAttribute('href', url);\n  link.setAttribute('download', `${title}.csv`);\n  link.style.visibility = 'hidden';\n  document.body.appendChild(link);\n  link.click();\n  document.body.removeChild(link);\n}\n\n// ==========================================================================\n// 9. BACKUP \u0026 RESTORE DATABASE\n// ==========================================================================\n\nfunction triggerDatabaseBackup() {\n  try {\n    const backupJson = realm.exportBackup();\n    \n    // Download logic\n    const blob = new Blob([backupJson], { type: 'application/json' });\n    const url = URL.createObjectURL(blob);\n    const link = document.createElement('a');\n    \n    const dateStr = new Date().toISOString().slice(0, 10);\n    link.setAttribute('href', url);\n    link.setAttribute('download', `atlas_backup_${dateStr}.json`);\n    link.style.visibility = 'hidden';\n    document.body.appendChild(link);\n    link.click();\n    document.body.removeChild(link);\n  } catch (e) {\n    alert('فشل تصدير النسخة الاحتياطية لقاعدة البيانات: ' + e.message);\n  }\n}\n\nfunction triggerDatabaseRestore() {\n  const fileInput = document.getElementById('backup-file-input');\n  if (!fileInput.files || fileInput.files.length === 0) {\n    alert('يرجى اختيار ملف النسخة الاحتياطية (.json) أولاً.');\n    return;\n  }\n\n  const file = fileInput.files[0];\n  const reader = new FileReader();\n\n  reader.onload = function(e) {\n    try {\n      const jsonContent = e.target.result;\n      const success = realm.importRestore(jsonContent);\n      if (success) {\n        alert('تم استعادة قاعدة البيانات بنجاح! سيتم إعادة تحميل الصفحة لتطبيق التغييرات.');\n        window.location.reload();\n      }\n    } catch (err) {\n      alert('فشل استعادة البيانات. تأكد من صحة وسلامة الملف المختار: ' + err.message);\n    }\n  };\n\n  reader.readAsText(file);\n}\n","Description":"Create client-side application app.js to control dynamic view switching, client updates, shipment logic, automatic price calculating, receipts previewing, Excel reports generating, and local backup utility.","IsArtifact":false,"Overwrite":true,"TargetFile":"C:\\Users\\ayoub\\Documents\\antigravity\\magical-maxwell\\app.js","toolAction":"Writing app.js","toolSummary":"Create core app script"}:�&�&
+�&9��]�P���b'nq�Lw� �$!o��#H$��Y7�4-��M�k!�,��e%�GN��}�L'�+� �S��1�tC�uO�X�dn���a�
+�wW������GfA�Mـ+Vk�9F��2����D�S��Y[�������MBY_�8Z�&�)��vc�|%$¨�RO��34N��P%��>Ў3h�h&���mG�E`�^�,�8}�F��Y�#��>�0���ŋ���M��&ax؅4�m�n�.�U/�.��a�Nu��v&�.����1�5^���o~ꧤ�:�Sr�xY��D	����&rr����t��C��u��É��^G7�;J�w�Ƴ�N��2�'�G��> �Y?���{���Sd�#ej�9�m�^���?Br����1.P
+��64�W��F�n���"��E�n7�?�����Ba��*�ǕQ��0�1�E�ņt�7/����&ԕᑋ�y5��Ƹ·����6�������^gHB�|�j�Һ�L�uK+��?��[�c����K�KxG���?F�����t���u%�&�Ҿ�?!-�E�ȠZ��n�VK�Zs��&��ⅶsjpJ����U+�7��+%�&�T�j�Z结��)&��:�u��J�A[�ݲ�k�gh�p�qO7���˴�3&={T���l�/o� S�VH�r�q8�i��,���k��B�=���Us�)C��0�pPm����l�ʆ��}�0�~��[7�H	���.�W�oŜ�I
+���?�+1d�z�]'�Mչf�>n�Z�+�ӹ�'�G|��7NU�o�{����k+�1�w�R��9	}��I8@k� f��힣}~�<��N��H �.�nId[ݻ�ڙL�W+Z��Z��
+�G����an���E�/�.�8��v��CI��(8�d��~����~B���V��0�8�>�uQ  �"F���Sh���j���o�c-sTcO0xb��c�\�m]%,Yl����<z^�غ�� ��L�;rd`Õ�O��]�ɈC"��y3Zǥ0\������=~�G*O���.�wT��F[}�y�����m�K���Ū���Q��j�E� �=��	��lĝT��Y�C`�R�\��^�q�TZZg#jk�{�{�=���hP�0��X=	�G9�T��\T"��d�	���.�=Nd�ڤ� �q�U��Ҧ�O1�.wx�?�mGR�H����7i���Iռ K��LD�qA�*��E"i�A��e8�zi����-Fe��ԂW]�ͽ(Uk���{�;}�[ۤO�8^��Wz �V��6k�|(W��8��sf�-D�A7����?�⁵�A��1w*!�N�4��($5����9w�d7"M�r!�(�C1����x�&��-3�=��3MS�+vծ�Yc0�aEP�*�.I��l����@Z��hN��r!Rp���hW���=@S��)V-|Ĵ(�p��M�`�h�b,�w��7�8�?_�K�����)PJ�rcu��m�|�;Pv(����������;��Q.O�o�M��9�H5|x!��v��ď�־�����u�#�P�8iG�w鏊Is�I���d���I{�aOb
+&�����<�C�e��.�\I�V�������l�4�Y@����G
+E��P�SCG�����W{Tȿ�_p`�����0ŵ>��j|r�C��6��<��r}�ܗJ"�u��y� ��g��5˄�p��d��4䧤݂���=�@SĶ_p�ş��b�^�J�+2b񵓝�f�?���������K�Ѩ4�=��L,�%I����m4��ȏ��e�"�M�Ê�'=�����ǩ��n���^ҟ�0ym�f�S5���J�W��9��g:߇.Ք�fV�A�bFPI��0``�l^�0箃Hi}�G�O,%$Sv�q�N}���P�$�YT��ךUZ�l�Pe���R�QJ#��XC"��T�僉�l�$����V �}��������d<�S!���\Y,�=)�oEU\Fs��a�&j��g8қuoK��,h�y��q���*)
+����|����M%r��������yjY<��8�<{��9�g�P�r���}�l�Ryo�r�[N�5/A�*��e�:M��.�X�v�ˑ���+�47�4�t3V^_�
+6�/��I~������VHS�Gͼt, ��?����Uf�4�M+w���H��K���ھRN��%mI��;_���L���m�4� ���^��Da�H����Z}2�TJ &+#���07ݿ�2�m=�z�EBkH?)�VO�T�?��	�i�� �ϙ��o/��q�?�Ӫ>}=s�O�']�(KLo�o��o�/�7���2մm:�$�H���۔B��c�:�~]��.�.�bzid}�\E�|!��[��$�-S�i �&����Pȃ�0��p?�`~`���>�!nk��6���pw3{邵��M�;۟X`�p�7b6��5�����#�^�)h�P����ˇ�>?�����D����,�jI��m@���K�n=d���+���c��Cg���^�qڷ6Fн�����uʢ�Ip�w;GI�*��p�,&��R��w�r���K��e��*zE},T9�	�����C��qU�F:y�q��bg����_ƕ.��a
+q�Am7f ���NWF�ӭVd�K����n*_1���Wn�~��2'��]�dqx�l���&�ַ7C5Xg�ˉ������}o�����{gu��L�P�Ɇ X�r�����v�z@����'��7�x�0"�N�$G0Qo��!o�re�l<ɕE1�p���o�����a��L�`����]f�Q�0�@?�Sz���nsi��h�bZ#֭+V1��2�3Z Na� �Z�OW#�-)�<�5�FW/`	���O]�8�t��-��
+�����Anh_��\�L��P[�IR\�YPb�8�!`{��b&��M�;�*��*SMe<a�Ή1��b:��u͜1~n���{�}t�	�_���);L�̂Z0���X���I~���*������tk�:>���^Y�(3����O��"Y�MwR����˸�u��㱗�82��A��sNJ!�g��g�s����P[&�rD��r͗=��X����:Ɉ����s�ؠ����(���\�i�ì�(?�0�Aw7��M�#�������\wl~��ƻ�Rc�Tc�E@ޠ��c�����4��C8�h\���=wk� �X���A�'~x$���S2���AC}���rUe��DM�J����u���iP���+#Y^��	v6���Bn��X�+{���VG�4����.�嚲T|78_��t_������_g(�t�b�X�Rw!�i%�CrWd��n3ge�CP$��t�' k)k����EM?�d-R��/B�����Nb�`�iF�����P��KS��C��U
+߶�F�����G�.��5��!�V�\�������G�Z�==z|I��F�~�b���2�h�!*e:ކ!i�F J��tV&qeI��*��|`b(�:���f�λhu�m��	I��7���p�棋?C5�f3!��&�(�_k�
+)��l0u�.�>5/��93I�6��c�H�c�Usx�!ה�%�&��DA��٫�0���"�ʷL��^�z������ᾯ�FmT�9@�?���(,tEtoxv�UkgddR*�Tg=�@��� 9$N�A�p��L[GOf{bb��%���6@�|��飍ZՇ?�k�}I��S���VM4_w�+$��<���,h^�z\i�D�F��y��tƂ�a�#(Y�&'=B��$�#	��w���4g������
+�_�\��Gׁ�<��)b�-�g��� _������
+7���}���<NV�����l%��֬�x4$R���`K9-�+g�߈�2n51U\:�L���&���?C�������?҅�G�T�;HP��=f�;ǁ��Bsova��_�����շ'~l���q�X�D����ì������w�9�	���g����]���W���7Q��P�^�r���~�,�6�wH���u������ǝ{M��u7�R���)�Kci��GN��97Z=<xTHfޚj7⿌�������9�&�������_�Ư��o)��oL���(�e.tj����}O���EɞѥK��p�:��s�+g����rjH2SJ��A�R�BW~8C�y�~uC[jν=��_����P5��Ax>��J��[ؙ�"�U<(6�������?�Zb���j;�&�e9Q]�:��L~L���4M��	��(�ii�>�a
+��iK�B�LgnX�i�l���" @�ӷ����E�H}�'�lC���>��E�I�*0�7�=x�����ĺ��J[�d��v��`r�J��i�^\BŴ��9��!L�~���������zP�\�"�Ю,���n:	b�^p�D���#�x��=ϥ�'��FR�����v(�Q����$1�'��e��i�<�G��DZV{�?�0�+r�����z}
+��P�:c��HEUoo�;�(�~rJ͖�)�(!]�;�p�;��$��'�pm��] �P�5<a%����O
+��0,��W��i���G�E�ul�h��hʑ�ڀ��*�� #vaf�h�UǊ��N�`��r�E��<�|פh������H��{�g/�Ow��wP��F�ø�.�)�$�uk�6b��f�m����P�f�P����&����h��H��\|I�Sl�<������/td���K�=Oa�M�ua�R�,z�A�ҟY��qk,6�ԛ�"j�^�N���څ�ǯ�U�J��P�
+�A������N��!��S͞c#�lA�xc~摓����	�^V�F�;��G�p��Y�C6����5��S�oTJwrite_to_file*ArtifactMetadata*CodeContent*Description*
+IsArtifact*	Overwrite*
+TargetFile*
+toolAction*toolSummary2�������.:�������.B�������4X�b$57283bb6-5e43-47cb-8ee8-3ad9a34f0551j��P
+$6a8523be-9b83-46db-8b2b-7eba9ee05327J""$fdc5ba65-3ddc-47d5-beb4-7de4515e1e0f�������˹.��s�3
+�������.
+�������0
+�������4�Create core app script�Writing app.js�������/R��
+��
+��// Initialize Realm DB Database
+let realm;
+
+// Current Active View State
+let currentView = 'dashboard';
+
+// Global variables for edit states
+let currentEditingCustomer = null;
+let currentEditingShipment = null;
+
+// ==========================================================================
+// 1. APPLICATION INITIALIZATION & CORE TRIGGERS
+// ==========================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Open Database
+  realm = window.RealmDatabase.open();
+  
+  // Check User Session
+  checkSession();
+});
+
+function checkSession() {
+  const session = sessionStorage.getItem('atlas_cargo_session');
+  const loginOverlay = document.getElementById('login-overlay');
+  const appShell = document.getElementById('app-shell');
+
+  if (session) {
+    loginOverlay.style.display = 'none';
+    appShell.style.display = 'flex';
+    
+    // Parse user profile
+    const user = JSON.parse(session);
+    document.getElementById('header-username').textContent = user.name;
+    document.getElementById('header-avatar').textContent = user.name.charAt(0);
+    
+    initApp();
+  } else {
+    loginOverlay.style.display = 'flex';
+    appShell.style.display = 'none';
+  }
+}
+
+function handleLogin() {
+  const usernameInput = document.getElementById('login-username').value.trim();
+  const passwordInput = document.getElementById('login-password').value;
+  const errorMsg = document.getElementById('login-error-msg');
+
+  // Query User in Realm Database Emulation
+  const users = realm.objects('User').filtered(`username == '${usernameInput}'`);
+
+  if (users.length > 0 && users[0].password === passwordInput) {
+    const user = users[0];
+    sessionStorage.setItem('atlas_cargo_session', JSON.stringify({
+      username: user.username,
+      name: user.name,
+      role: user.role
+    }));
+    errorMsg.style.display = 'none';
+    checkSession();
+  } else {
+    errorMsg.style.display = 'block';
+  }
+}
+
+function handleLogout() {
+  sessionStorage.removeItem('atlas_cargo_session');
+  checkSession();
+}
+
+function initApp() {
+  // Reset navigation
+  switchView('dashboard');
+  
+  // Populate country list inputs in the shipment modal
+  populateShipmentModalCountries();
+  
+  // Populate country filter dropdown in shipments view
+  populateShipmentsCountryFilter();
+
+  // Populate date inputs for reports
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('report-date-input').value = today;
+  const currentMonth = today.substring(0, 7);
+  document.getElementById('report-month-input').value = currentMonth;
+}
+
+// Navigation Switcher
+function switchView(viewName) {
+  // Update sidebar menu highlight
+  const menuItems = document.querySelectorAll('.sidebar-menu .menu-item');
+  menuItems.forEach(item => item.classList.remove('active'));
+  
+  const targetMenu = document.getElementById(`menu-${viewName}`);
+  if (targetMenu) targetMenu.classList.add('active');
+
+  // Switch panels
+  const panels = document.querySelectorAll('.view-panel');
+  panels.forEach(panel => panel.classList.remove('active'));
+  
+  const targetPanel = document.getElementById(`view-${viewName}`);
+  if (targetPanel) targetPanel.classList.add('active');
+
+  currentView = viewName;
+
+  // Header Title Customization
+  const pageTitle = document.getElementById('page-view-title');
+  const pageSubtitle = document.getElementById('page-view-subtitle');
+
+  switch (viewName) {
+    case 'dashboard':
+      pageTitle.textContent = 'لوحة التحكم';
+      pageSubtitle.textContent = 'نظرة عامة على نشاط وكالة الشحن الدولي اليوم';
+      renderDashboard();
+      break;
+    case 'shipments':
+      pageTitle.textContent = 'الطرود والشحنات';
+      pageSubtitle.textContent = 'إدارة ومتابعة الشحنات والطرود الصادرة إلى أوروبا';
+      renderShipments();
+      break;
+    case 'customers':
+      pageTitle.textContent = 'إدارة العملاء';
+      pageSubtitle.textContent = 'تسجيل وإدارة العملاء بالوكالة ومراجعة سجلات شحنهم';
+      renderCustomers();
+      break;
+    case 'pricing':
+      pageTitle.textContent = 'تعرفة الشحن للدول الأوروبية';
+      pageSubtitle.textContent = 'تعديل وتحديد تسعيرة الشحن لكل بلد أوروبي بالدرهم';
+      renderPricingSettings();
+      break;
+    case 'reports':
+      pageTitle.textContent = 'التقارير المالية والنشاط';
+      pageSubtitle.textContent = 'استعراض تقارير الأرباح والشحنات وتصديرها PDF أو Excel';
+      generateReportData();
+      break;
+    case 'settings':
+      pageTitle.textContent = 'الإعدادات والنسخ الاحتياطي';
+      pageSubtitle.textContent = 'أدوات الصيانة، النسخ الاحتياطي لقاعدة البيانات واستعادتها';
+      break;
+  }
+}
+
+// Generate unique tracking number (MA-EU-XXXXXX)
+function generateTrackingNumber() {
+  const chars = '0123456789';
+  let random = '';
+  for (let i = 0; i < 6; i++) {
+    random += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `MA-EU-${random}`;
+}
+
+// Generate unique customer ID (CUST-XXXX)
+function generateCustomerID() {
+  const chars = '0123456789';
+  let random = '';
+  for (let i = 0; i < 4; i++) {
+    random += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `CUST-${random}`;
+}
+
+// Helper to format currency
+function formatMAD(amount) {
+  return `${Number(amount).toFixed(2)} DH`;
+}
+
+// Helper to translate status codes to Arabic
+const STATUS_AR = {
+  'received': 'قيد الاستلام',
+  'processing': 'قيد المعالجة',
+  'transit': 'في الطريق',
+  'arrived': 'وصلت بلد الوجهة',
+  'delivered': 'تم التسليم',
+  'cancelled': 'ملغاة'
+};
+
+// ==========================================================================
+// 2. DASHBOARD PANEL LOGIC
+// ==========================================================================
+
+function renderDashboard() {
+  const shipments = realm.objects('Shipment');
+  
+  // Compute KPIs
+  const totalCount = shipments.length;
+  const transitCount = shipments.filtered("status == 'transit'").length;
+  const processingCount = shipments.filtered("status == 'processing'").length;
+  const receivedCount = shipments.filtered("status == 'received'").length;
+  const arrivedCount = shipments.filtered("status == 'arrived'").length;
+  
+  const pendingCount = processingCount + receivedCount + arrivedCount;
+  const deliveredCount = shipments.filtered("status == 'delivered'").length;
+  const cancelledCount = shipments.filtered("status == 'cancelled'").length;
+
+  // Compute monthly profit (sum prices of delivered/active shipments created this month)
+  const now = new Date();
+  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  
+  const currentMonthShipments = shipments.filter(s => 
+    s.createdAt.startsWith(currentYearMonth) && s.status !== 'cancelled'
+  );
+  const monthlyRevenue = currentMonthShipments.reduce((sum, s) => sum + s.shippingPrice, 0);
+
+  // Update UI Elements
+  document.getElementById('kpi-total-shipments').textContent = totalCount;
+  document.getElementById('kpi-transit-shipments').textContent = pendingCount;
+  document.getElementById('kpi-delivered-shipments').textContent = deliveredCount;
+  document.getElementById('kpi-cancelled-shipments').textContent = cancelledCount;
+  document.getElementById('kpi-monthly-profits').textContent = formatMAD(monthlyRevenue);
+
+  // Render recent 5 shipments
+  const sortedShipments = shipments.sorted('createdAt', true).slice(0, 5);
+  const recentTable = document.getElementById('dashboard-recent-table-body');
+  recentTable.innerHTML = '';
+
+  if (sortedShipments.length === 0) {
+    recentTable.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد شحنات مسجلة حالياً بالوكالة</td></tr>`;
+  } else {
+    sortedShipments.forEach(s => {
+      const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];
+      const flag = countryObj ? countryObj.flag : '';
+      const countryName = countryObj ? countryObj.countryName : s.destinationCountry;
+
+      recentTable.innerHTML += `
+        <tr>
+          <td style="font-family:'Estedad', sans-serif; font-weight:700; color:var(--primary-color);">${s.trackingNumber}</td>
+          <td><strong>${s.senderName}</strong></td>
+          <td>${s.receiverName}</td>
+          <td>
+            <div class="country-item">
+              <span class="country-flag">${flag}</span>
+              <span>${countryName}</span>
+            </div>
+          </td>
+          <td>${s.weight} كجم (${s.quantity} طرود)</td>
+          <td style="font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>
+          <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn-icon" title="الفاتورة" onclick="openInvoiceModal('${s.trackingNumber}')"><i class="fa-solid fa-file-invoice"></i></button>
+              <button class="btn-icon" title="تحديث الحالة" onclick="openStatusModal('${s.trackingNumber}')"><i class="fa-solid fa-route"></i></button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+  }
+
+  // Render country stats progress bars
+  const countryBreakdown = document.getElementById('dashboard-country-breakdown');
+  countryBreakdown.innerHTML = '';
+
+  // Get active pricing list with shipments mapped
+  const countries = realm.objects('CountryPrice').filtered('isActive == true');
+  
+  // Calculate shipments count per country
+  const countryStats = [];
+  countries.forEach(c => {
+    const count = shipments.filtered(`destinationCountry == '${c.countryCode}'`).length;
+    if (count > 0) {
+      countryStats.push({
+        name: c.countryName,
+        flag: c.flag,
+        count: count
+      });
+    }
+  });
+
+  // Sort by count descending
+  countryStats.sort((a, b) => b.count - a.count);
+
+  if (countryStats.length === 0) {
+    countryBreakdown.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-secondary); font-size:12px;">لا توجد إحصائيات شحنات حالياً بالدول</div>`;
+  } else {
+    const maxCount = Math.max(...countryStats.map(s => s.count));
+    countryStats.slice(0, 5).forEach(stat => {
+      const percentage = (stat.count / totalCount) * 100;
+      countryBreakdown.innerHTML += `
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <div style="display:flex; justify-content:space-between; font-size:12px;">
+            <span style="font-weight:700;">${stat.flag} ${stat.name}</span>
+            <span style="color:var(--text-secondary); font-family:'Estedad', sans-serif; font-weight:700;">${stat.count} شحنات (${percentage.toFixed(0)}%)</span>
+          </div>
+          <div style="width:100%; height:8px; background-color:var(--light-bg); border-radius:4px; overflow:hidden;">
+            <div style="width:${percentage}%; height:100%; background-color:var(--primary-color); border-radius:4px;"></div>
+          </div>
+        </div>
+      `;
+    });
+  }
+}
+
+// ==========================================================================
+// 3. SHIPMENTS LOGIC & CRUD
+// ==========================================================================
+
+function populateShipmentModalCountries() {
+  const select = document.getElementById('shipment-country');
+  const countries = realm.objects('CountryPrice').filtered('isActive == true').sorted('countryName');
+  
+  select.innerHTML = '<option value="">-- اختر دولة الوجهة --</option>';
+  countries.forEach(c => {
+    select.innerHTML += `<option value="${c.countryCode}">${c.flag} ${c.countryName}</option>`;
+  });
+}
+
+function populateShipmentsCountryFilter() {
+  const select = document.getElementById('shipment-country-filter');
+  const countries = realm.objects('CountryPrice').filtered('isActive == true').sorted('countryName');
+  
+  select.innerHTML = '<option value="">كل دول أوروبا</option>';
+  countries.forEach(c => {
+    select.innerHTML += `<option value="${c.countryCode}">${c.flag} ${c.countryName}</option>`;
+  });
+}
+
+function renderShipments() {
+  filterShipments();
+}
+
+function filterShipments() {
+  const searchQuery = document.getElementById('shipment-search').value.trim();
+  const countryFilter = document.getElementById('shipment-country-filter').value;
+  const statusFilter = document.getElementById('shipment-status-filter').value;
+  
+  let shipments = realm.objects('Shipment');
+
+  // Filter by country
+  if (countryFilter) {
+    shipments = shipments.filtered(`destinationCountry == '${countryFilter}'`);
+  }
+
+  // Filter by status
+  if (statusFilter) {
+    shipments = shipments.filtered(`status == '${statusFilter}'`);
+  }
+
+  // Filter by search text
+  if (searchQuery) {
+    shipments = shipments.filter(s => 
+      s.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.receiverName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.city.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  } else {
+    // Keep it as RealmResults type for sorting if no JS filter applied
+    shipments = shipments.sorted('createdAt', true);
+  }
+
+  const tableBody = document.getElementById('shipments-table-body');
+  tableBody.innerHTML = '';
+
+  if (shipments.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-secondary);">لا توجد شحنات مطابقة لخيارات البحث المحددة</td></tr>`;
+    return;
+  }
+
+  // If filtered by search, manual sorting
+  if (searchQuery && Array.isArray(shipments)) {
+    shipments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  shipments.forEach(s => {
+    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];
+    const flag = countryObj ? countryObj.flag : '';
+    const countryName = countryObj ? countryObj.countryName : s.destinationCountry;
+
+    tableBody.innerHTML += `
+      <tr>
+        <td style="font-family:'Estedad', sans-serif; font-weight:900; color:var(--primary-color);">${s.trackingNumber}</td>
+        <td style="font-size:11px; color:var(--text-secondary);">${s.createdAt.split('T')[0]}</td>
+        <td>
+          <div style="font-weight:700;">${s.senderName}</div>
+          <div style="font-size:11px; color:var(--text-secondary);">${s.senderPhone}</div>
+        </td>
+        <td>
+          <div style="font-weight:700;">${s.receiverName}</div>
+          <div style="font-size:11px; color:var(--text-secondary);">${s.receiverPhone}</div>
+        </td>
+        <td>
+          <div class="country-item" style="font-weight:700;">
+            <span class="country-flag">${flag}</span>
+            <span>${countryName} - ${s.city}</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.fullAddress}</div>
+        </td>
+        <td>
+          <div style="font-weight:700;">${s.weight} كجم</div>
+          <div style="font-size:11px; color:var(--text-secondary);">${s.quantity} طرود</div>
+        </td>
+        <td style="font-family:'Estedad', sans-serif; font-weight:800; font-size:14px; color:var(--text-dark);">${formatMAD(s.shippingPrice)}</td>
+        <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+        <td>
+          <div class="actions-cell">
+            <button class="btn-icon" title="الفاتورة" onclick="openInvoiceModal('${s.trackingNumber}')"><i class="fa-solid fa-file-invoice"></i></button>
+            <button class="btn-icon" title="تحديث الحالة" onclick="openStatusModal('${s.trackingNumber}')"><i class="fa-solid fa-route"></i></button>
+            <button class="btn-icon" title="تعديل" onclick="openEditShipmentModal('${s.trackingNumber}')"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button class="btn-icon delete" title="حذف الشحنة" onclick="deleteShipmentData('${s.trackingNumber}')"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+function openNewShipmentModal() {
+  currentEditingShipment = null;
+  document.getElementById('shipment-modal-title').textContent = 'تسجيل طرد شحن جديد';
+  
+  // Generate code
+  const newCode = generateTrackingNumber();
+  document.getElementById('shipment-tracking-display').textContent = newCode;
+  
+  // Load clients in dropdown
+  populateCustomersDropdown('shipment-sender-select');
+
+  // Reset form
+  document.getElementById('shipment-form').reset();
+  document.getElementById('shipment-edit-id').value = '';
+  document.getElementById('shipment-price').value = '';
+  document.getElementById('price-calc-hint').textContent = 'قم باختيار الدولة وتحديد الوزن لحساب التسعير';
+  
+  document.getElementById('shipment-modal').showModal();
+}
+
+function openEditShipmentModal(trackingNumber) {
+  const shipment = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+  if (!shipment) return;
+
+  currentEditingShipment = shipment;
+  document.getElementById('shipment-modal-title').textContent = 'تعديل بيانات الشحنة';
+  document.getElementById('shipment-tracking-display').textContent = shipment.trackingNumber;
+
+  // Load clients
+  populateCustomersDropdown('shipment-sender-select', shipment.senderCustomerId);
+
+  // Fill details
+  document.getElementById('shipment-edit-id').value = shipment.trackingNumber;
+  document.getElementById('shipment-sender-name').value = shipment.senderName;
+  document.getElementById('shipment-sender-phone').value = shipment.senderPhone;
+  document.getElementById('shipment-receiver-name').value = shipment.receiverName;
+  document.getElementById('shipment-receiver-phone').value = shipment.receiverPhone;
+  document.getElementById('shipment-country').value = shipment.destinationCountry;
+  document.getElementById('shipment-city').value = shipment.city;
+  document.getElementById('shipment-address').value = shipment.fullAddress;
+  document.getElementById('shipment-quantity').value = shipment.quantity;
+  document.getElementById('shipment-weight').value = shipment.weight;
+  document.getElementById('shipment-price').value = shipment.shippingPrice;
+  document.getElementById('shipment-status').value = shipment.status;
+  document.getElementById('shipment-notes').value = shipment.notes || '';
+
+  document.getElementById('price-calc-hint').textContent = 'سعر الشحن المعتمد لهذه الشحنة حالياً';
+
+  document.getElementById('shipment-modal').showModal();
+}
+
+function populateCustomersDropdown(selectId, selectedValue = '') {
+  const select = document.getElementById(selectId);
+  const customers = realm.objects('Customer').sorted('name');
+  
+  select.innerHTML = '<option value="">-- اختر عميلاً مرسلاً --</option>';
+  customers.forEach(c => {
+    const selected = c.id === selectedValue ? 'selected' : '';
+    select.innerHTML += `<option value="${c.id}" ${selected}>${c.name} (${c.phone})</option>`;
+  });
+}
+
+function autoFillSenderInfo() {
+  const select = document.getElementById('shipment-sender-select');
+  const customerId = select.value;
+  
+  const nameInput = document.getElementById('shipment-sender-name');
+  const phoneInput = document.getElementById('shipment-sender-phone');
+
+  if (customerId) {
+    const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+    if (cust) {
+      nameInput.value = cust.name;
+      phoneInput.value = cust.phone;
+    }
+  } else {
+    nameInput.value = '';
+    phoneInput.value = '';
+  }
+}
+
+function calculateShippingPrice() {
+  const countryCode = document.getElementById('shipment-country').value;
+  const weightVal = parseFloat(document.getElementById('shipment-weight').value) || 0;
+  const quantityVal = parseInt(document.getElementById('shipment-quantity').value) || 1;
+  const priceInput = document.getElementById('shipment-price');
+  const calcHint = document.getElementById('price-calc-hint');
+
+  if (!countryCode || weightVal <= 0) {
+    return;
+  }
+
+  // Get country price metrics from Realm DB
+  const rate = realm.objects('CountryPrice').filtered(`countryCode == '${countryCode}'`)[0];
+  if (!rate) return;
+
+  // Pricing Rule: Base Price covers the first package, additional weights add cost per Kg
+  // Surcharge of 10% per additional package if quantity > 1
+  let finalPrice = rate.basePrice + (weightVal * rate.pricePerKg);
+  if (quantityVal > 1) {
+    finalPrice += (quantityVal - 1) * 15; // flat 15 DH for each extra package
+  }
+
+  finalPrice = Math.round(finalPrice);
+  priceInput.value = finalPrice;
+  calcHint.textContent = `السعر التلقائي: الأساسي (${rate.basePrice} DH) + الوزن (${rate.pricePerKg} DH/كجم) + الطرود الإضافية.`;
+}
+
+function saveShipmentData() {
+  const editId = document.getElementById('shipment-edit-id').value;
+  const senderId = document.getElementById('shipment-sender-select').value;
+  const senderName = document.getElementById('shipment-sender-name').value;
+  const senderPhone = document.getElementById('shipment-sender-phone').value;
+  
+  const receiverName = document.getElementById('shipment-receiver-name').value.trim();
+  const receiverPhone = document.getElementById('shipment-receiver-phone').value.trim();
+  const destinationCountry = document.getElementById('shipment-country').value;
+  const city = document.getElementById('shipment-city').value.trim();
+  const fullAddress = document.getElementById('shipment-address').value.trim();
+  const quantity = parseInt(document.getElementById('shipment-quantity').value) || 1;
+  const weight = parseFloat(document.getElementById('shipment-weight').value) || 1;
+  const shippingPrice = parseFloat(document.getElementById('shipment-price').value) || 0;
+  const status = document.getElementById('shipment-status').value;
+  const notes = document.getElementById('shipment-notes').value.trim();
+
+  let trackingNumber = editId;
+
+  realm.write(() => {
+    if (editId) {
+      // Edit
+      const s = realm.objects('Shipment').filtered(`trackingNumber == '${editId}'`)[0];
+      if (s) {
+        // If status changed, push to history logs
+        if (s.status !== status) {
+          s.statusHistory.push({
+            status: status,
+            date: new Date().toISOString(),
+            note: 'تم تعديل تفاصيل الحالة'
+          });
+        }
+        
+        s.receiverName = receiverName;
+        s.receiverPhone = receiverPhone;
+        s.destinationCountry = destinationCountry;
+        s.city = city;
+        s.fullAddress = fullAddress;
+        s.quantity = quantity;
+        s.weight = weight;
+        s.shippingPrice = shippingPrice;
+        s.status = status;
+        s.notes = notes;
+      }
+    } else {
+      // New
+      trackingNumber = document.getElementById('shipment-tracking-display').textContent;
+      
+      const newShipment = {
+        trackingNumber: trackingNumber,
+        senderName: senderName,
+        senderPhone: senderPhone,
+        senderCustomerId: senderId,
+        receiverName: receiverName,
+        receiverPhone: receiverPhone,
+        destinationCountry: destinationCountry,
+        city: city,
+        fullAddress: fullAddress,
+        weight: weight,
+        quantity: quantity,
+        shippingPrice: shippingPrice,
+        status: status,
+        createdAt: new Date().toISOString(),
+        statusHistory: [{
+          status: status,
+          date: new Date().toISOString(),
+          note: 'تسجيل الشحنة بالمستودع'
+        }],
+        notes: notes
+      };
+      
+      realm.create('Shipment', newShipment);
+
+      // Increment customer's shipmentsCount
+      const customerObj = realm.objects('Customer').filtered(`id == '${senderId}'`)[0];
+      if (customerObj) {
+        customerObj.shipmentsCount += 1;
+      }
+
+      // Also create an invoice automatically for the client
+      const invoiceNum = `FAC-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${trackingNumber.slice(-4)}`;
+      const newInvoice = {
+        invoiceNumber: invoiceNum,
+        shipmentTrackingNumber: trackingNumber,
+        customerId: senderId,
+        customerName: senderName,
+        totalAmount: shippingPrice,
+        paymentStatus: 'paid', // Default paid on receipt
+        paymentMethod: 'cash',
+        createdAt: new Date().toISOString()
+      };
+      realm.create('Invoice', newInvoice);
+    }
+  });
+
+  document.getElementById('shipment-modal').close();
+  
+  // Refresh views
+  if (currentView === 'dashboard') {
+    renderDashboard();
+  } else if (currentView === 'shipments') {
+    renderShipments();
+  }
+}
+
+function deleteShipmentData(trackingNumber) {
+  if (confirm(`هل أنت متأكد من حذف الشحنة رقم ${trackingNumber} نهائياً من قاعدة البيانات؟`)) {
+    const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+    if (s) {
+      realm.write(() => {
+        // Decrement client shipmentsCount
+        const customerObj = realm.objects('Customer').filtered(`id == '${s.senderCustomerId}'`)[0];
+        if (customerObj && customerObj.shipmentsCount > 0) {
+          customerObj.shipmentsCount -= 1;
+        }
+
+        // Delete linked invoice
+        const invoices = realm.objects('Invoice').filtered(`shipmentTrackingNumber == '${trackingNumber}'`);
+        realm.delete(invoices);
+
+        // Delete shipment
+        realm.delete(s);
+      });
+      
+      if (currentView === 'dashboard') {
+        renderDashboard();
+      } else if (currentView === 'shipments') {
+        renderShipments();
+      }
+    }
+  }
+}
+
+// ==========================================================================
+// 4. SHIPMENTS STATUS HISTORY UPDATE
+// ==========================================================================
+
+function openStatusModal(trackingNumber) {
+  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+  if (!s) return;
+
+  document.getElementById('status-update-tracking').value = trackingNumber;
+  document.getElementById('status-update-select').value = s.status;
+  document.getElementById('status-update-note').value = '';
+
+  document.getElementById('status-modal').showModal();
+}
+
+function saveStatusUpdate() {
+  const trackingNumber = document.getElementById('status-update-tracking').value;
+  const newStatus = document.getElementById('status-update-select').value;
+  const noteText = document.getElementById('status-update-note').value.trim() || 'تحديث روتيني لحالة الشحن';
+
+  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+  if (s) {
+    realm.write(() => {
+      s.status = newStatus;
+      s.statusHistory.push({
+        status: newStatus,
+        date: new Date().toISOString(),
+        note: noteText
+      });
+    });
+  }
+
+  document.getElementById('status-modal').close();
+
+  if (currentView === 'dashboard') {
+    renderDashboard();
+  } else if (currentView === 'shipments') {
+    renderShipments();
+  }
+}
+
+// ==========================================================================
+// 5. CUSTOMERS PANEL & HISTORY
+// ==========================================================================
+
+function renderCustomers() {
+  filterCustomers();
+}
+
+function filterCustomers() {
+  const searchQuery = document.getElementById('customer-search').value.trim();
+  let customers = realm.objects('Customer');
+
+  if (searchQuery) {
+    customers = customers.filter(c => 
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.phone.includes(searchQuery) ||
+      c.moroccoId.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  } else {
+    customers = customers.sorted('name');
+  }
+
+  const tableBody = document.getElementById('customers-table-body');
+  tableBody.innerHTML = '';
+
+  if (customers.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-secondary);">لا توجد عملاء مسجلين يطابقون مدخلات البحث</td></tr>`;
+    return;
+  }
+
+  customers.forEach(c => {
+    tableBody.innerHTML += `
+      <tr>
+        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${c.id}</td>
+        <td><strong>${c.name}</strong></td>
+        <td style="direction:ltr; text-align:right;">${c.phone}</td>
+        <td>${c.email || '<span style="color:var(--text-secondary);">--</span>'}</td>
+        <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.address || '<span style="color:var(--text-secondary);">--</span>'}</td>
+        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${c.moroccoId}</td>
+        <td style="font-size:11px; color:var(--text-secondary);">${c.createdAt.split('T')[0]}</td>
+        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${c.shipmentsCount} شحنات</td>
+        <td>
+          <div class="actions-cell">
+            <button class="btn-icon" title="سجل الشحنات" onclick="openCustomerHistory('${c.id}')"><i class="fa-solid fa-list-check"></i></button>
+            <button class="btn-icon" title="تعديل" onclick="openEditCustomerModal('${c.id}')"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button class="btn-icon delete" title="حذف العميل" onclick="deleteCustomerData('${c.id}')"><i class="fa-solid fa-user-xmark"></i></button>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+function openNewCustomerModal() {
+  currentEditingCustomer = null;
+  document.getElementById('customer-modal-title').textContent = 'إضافة عميل جديد بالوكالة';
+  document.getElementById('customer-form').reset();
+  document.getElementById('customer-edit-id').value = '';
+  document.getElementById('customer-modal').showModal();
+}
+
+function openEditCustomerModal(customerId) {
+  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+  if (!cust) return;
+
+  currentEditingCustomer = cust;
+  document.getElementById('customer-modal-title').textContent = 'تعديل بيانات العميل';
+  
+  document.getElementById('customer-edit-id').value = cust.id;
+  document.getElementById('customer-name').value = cust.name;
+  document.getElementById('customer-phone').value = cust.phone;
+  document.getElementById('customer-email').value = cust.email || '';
+  document.getElementById('customer-morocco-id').value = cust.moroccoId;
+  document.getElementById('customer-address').value = cust.address || '';
+
+  document.getElementById('customer-modal').showModal();
+}
+
+function saveCustomerData() {
+  const editId = document.getElementById('customer-edit-id').value;
+  const name = document.getElementById('customer-name').value.trim();
+  const phone = document.getElementById('customer-phone').value.trim();
+  const email = document.getElementById('customer-email').value.trim();
+  const moroccoId = document.getElementById('customer-morocco-id').value.trim().toUpperCase();
+  const address = document.getElementById('customer-address').value.trim();
+
+  realm.write(() => {
+    if (editId) {
+      // Edit Customer
+      const cust = realm.objects('Customer').filtered(`id == '${editId}'`)[0];
+      if (cust) {
+        // Cascaded update in shipments name & phone
+        const linkedShipments = realm.objects('Shipment').filtered(`senderCustomerId == '${editId}'`);
+        linkedShipments.forEach(s => {
+          s.senderName = name;
+          s.senderPhone = phone;
+        });
+
+        const linkedInvoices = realm.objects('Invoice').filtered(`customerId == '${editId}'`);
+        linkedInvoices.forEach(inv => {
+          inv.customerName = name;
+        });
+
+        cust.name = name;
+        cust.phone = phone;
+        cust.email = email;
+        cust.moroccoId = moroccoId;
+        cust.address = address;
+      }
+    } else {
+      // Create Customer
+      const newCust = {
+        id: generateCustomerID(),
+        name: name,
+        phone: phone,
+        email: email,
+        address: address,
+        moroccoId: moroccoId,
+        createdAt: new Date().toISOString(),
+        shipmentsCount: 0
+      };
+      
+      realm.create('Customer', newCust);
+    }
+  });
+
+  document.getElementById('customer-modal').close();
+  
+  if (currentView === 'customers') {
+    renderCustomers();
+  }
+}
+
+function deleteCustomerData(customerId) {
+  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+  if (!cust) return;
+
+  if (cust.shipmentsCount > 0) {
+    alert(`لا يمكن حذف هذا العميل نظراً لوجود عدد (${cust.shipmentsCount}) شحنات مسجلة باسمه في النظام.`);
+    return;
+  }
+
+  if (confirm(`هل أنت متأكد من حذف العميل "${cust.name}" بالكامل من قاعدة البيانات؟`)) {
+    realm.write(() => {
+      realm.delete(cust);
+    });
+    renderCustomers();
+  }
+}
+
+function openCustomerHistory(customerId) {
+  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+  if (!cust) return;
+
+  document.getElementById('history-modal-title').textContent = `سجل شحنات العميل: ${cust.name}`;
+
+  const shipments = realm.objects('Shipment').filtered(`senderCustomerId == '${customerId}'`).sorted('createdAt', true);
+  const tableBody = document.getElementById('history-table-body');
+  tableBody.innerHTML = '';
+
+  if (shipments.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد شحنات سابقة مسجلة باسم هذا العميل</td></tr>`;
+  } else {
+    shipments.forEach(s => {
+      const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];
+      const flag = countryObj ? countryObj.flag : '';
+      const countryName = countryObj ? countryObj.countryName : s.destinationCountry;
+
+      tableBody.innerHTML += `
+        <tr>
+          <td style="font-family:'Estedad', sans-serif; font-weight:700; color:var(--primary-color);">${s.trackingNumber}</td>
+          <td style="font-size:11px;">${s.createdAt.split('T')[0]}</td>
+          <td><strong>${s.receiverName}</strong></td>
+          <td>${flag} ${countryName}</td>
+          <td>${s.weight} كجم</td>
+          <td style="font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>
+          <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+        </tr>
+      `;
+    });
+  }
+
+  document.getElementById('history-modal').showModal();
+}
+
+// ==========================================================================
+// 6. PRICING SETTINGS LOGIC
+// ==========================================================================
+
+function renderPricingSettings() {
+  filterPricingList();
+}
+
+function filterPricingList() {
+  const searchQuery = document.getElementById('pricing-search').value.trim();
+  let countries = realm.objects('CountryPrice');
+
+  if (searchQuery) {
+    countries = countries.filter(c => 
+      c.countryName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.countryCode.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  } else {
+    countries = countries.sorted('countryName');
+  }
+
+  const container = document.getElementById('country-pricing-list-container');
+  container.innerHTML = '';
+
+  if (countries.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد دول مطابقة لمدخلات البحث</div>`;
+    return;
+  }
+
+  countries.forEach(c => {
+    container.innerHTML += `
+      <div class="pricing-row" id="pricing-row-${c.countryCode}">
+        <div class="country-details">
+          <span style="font-size:24px;">${c.flag}</span>
+          <div>
+            <div style="font-weight:800; font-size:14px;">${c.countryName}</div>
+            <span style="font-size:10px; font-family:'Estedad', sans-serif; background-color:#eaeaea; padding:2px 6px; border-radius:4px;">${c.countryCode}</span>
+          </div>
+        </div>
+        
+        <div class="pricing-inputs">
+          <div class="mini-input-group">
+            <label>التعرفة الأساسية (DH)</label>
+            <input type="number" id="base-price-${c.countryCode}" class="mini-input" value="${c.basePrice}">
+          </div>
+          
+          <div class="mini-input-group">
+            <label>سعر الكيلو الإضافي (DH)</label>
+            <input type="number" id="per-kg-${c.countryCode}" class="mini-input" value="${c.pricePerKg}">
+          </div>
+          
+          <button class="btn-primary" style="padding: 8px 16px; font-size:11px;" onclick="saveCountryPriceRate('${c.countryCode}')">
+            <i class="fa-solid fa-floppy-disk"></i> حفظ
+          </button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+function saveCountryPriceRate(countryCode) {
+  const basePriceVal = parseFloat(document.getElementById(`base-price-${countryCode}`).value) || 0;
+  const perKgVal = parseFloat(document.getElementById(`per-kg-${countryCode}`).value) || 0;
+
+  const rate = realm.objects('CountryPrice').filtered(`countryCode == '${countryCode}'`)[0];
+  if (rate) {
+    realm.write(() => {
+      rate.basePrice = basePriceVal;
+      rate.pricePerKg = perKgVal;
+    });
+
+    // Subtle micro feedback alert
+    const row = document.getElementById(`pricing-row-${countryCode}`);
+    row.style.borderColor = 'var(--color-success)';
+    row.style.backgroundColor = '#e8f5e9';
+    
+    setTimeout(() => {
+      row.style.borderColor = 'var(--border-light)';
+      row.style.backgroundColor = 'var(--light-bg)';
+    }, 1500);
+  }
+}
+
+// ==========================================================================
+// 7. INVOICE GENERATOR & PRINT LAYOUT
+// ==========================================================================
+
+function openInvoiceModal(trackingNumber) {
+  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+  if (!s) return;
+
+  const invoice = realm.objects('Invoice').filtered(`shipmentTrackingNumber == '${trackingNumber}'`)[0];
+  const invoiceNum = invoice ? invoice.invoiceNumber : `FAC-TEMP-${trackingNumber.slice(-4)}`;
+
+  const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];
+  const flag = countryObj ? countryObj.flag : '';
+  const countryName = countryObj ? countryObj.countryName : s.destinationCountry;
+
+  const invoicePrintArea = document.getElementById('invoice-print-area');
+  
+  invoicePrintArea.innerHTML = `
+    <div class="invoice-header">
+      <div class="invoice-logo-section">
+        <div class="invoice-logo">
+          <i class="fa-solid fa-paper-plane"></i>
+        </div>
+        <div>
+          <h1 class="invoice-company-name">وكالة أطلس إكسبريس</h1>
+          <p class="invoice-company-sub">لنقل الطرود والشحنات الدولية نحو أوروبا</p>
+        </div>
+      </div>
+      <div class="invoice-meta">
+        <h2 class="invoice-title-text">وصل شحن طرد</h2>
+        <div class="invoice-number">رقم الفاتورة: <span style="font-family:'Estedad', sans-serif;">${invoiceNum}</span></div>
+        <div class="invoice-date">تاريخ الإرسال: ${s.createdAt.split('T')[0]}</div>
+      </div>
+    </div>
+
+    <div class="invoice-parties">
+      <div class="party-box">
+        <div class="party-title">المرسل (المغرب)</div>
+        <div class="party-name">${s.senderName}</div>
+        <div class="party-details">
+          <span>الهاتف: ${s.senderPhone}</span>
+          <span>الهوية الوطنية: ${s.notes || '--'}</span>
+        </div>
+      </div>
+
+      <div class="party-box">
+        <div class="party-title">المستلم (أوروبا)</div>
+        <div class="party-name">${s.receiverName}</div>
+        <div class="party-details">
+          <span>البلد: ${flag} ${countryName}</span>
+          <span>المدينة: ${s.city}</span>
+          <span>الهاتف: ${s.receiverPhone}</span>
+          <span>العنوان: ${s.fullAddress}</span>
+        </div>
+      </div>
+    </div>
+
+    <table class="invoice-table">
+      <thead>
+        <tr>
+          <th>تفاصيل الشحنة والخدمة</th>
+          <th style="text-align:center;">الوزن</th>
+          <th style="text-align:center;">عدد الطرود</th>
+          <th style="text-align:left;">المبلغ الفرعي</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong>شحن دولي جوي وبري سريع</strong><br>
+            <span style="font-size:11px; color:#555;">من المغرب نحو ${countryName} (رقم التتبع: ${s.trackingNumber})</span>
+          </td>
+          <td style="text-align:center; font-family:'Estedad', sans-serif;">${s.weight} كجم</td>
+          <td style="text-align:center; font-family:'Estedad', sans-serif;">${s.quantity}</td>
+          <td style="text-align:left; font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="invoice-totals">
+      <div class="total-row">
+        <span>السعر الخاضع للضريبة:</span>
+        <span style="font-family:'Estedad', sans-serif;">${formatMAD(s.shippingPrice * 0.8)}</span>
+      </div>
+      <div class="total-row">
+        <span>الضريبة المضافة (20%):</span>
+        <span style="font-family:'Estedad', sans-serif;">${formatMAD(s.shippingPrice * 0.2)}</span>
+      </div>
+      <div class="total-row grand-total">
+        <span>المجموع الإجمالي:</span>
+        <span style="font-family:'Estedad', sans-serif;">${formatMAD(s.shippingPrice)}</span>
+      </div>
+    </div>
+
+    <div style="background-color:#e8f5e9; border:1px solid #c8e6c9; border-radius:8px; padding:12px; margin-bottom:30px; text-align:center; font-weight:700; color:#2e7d32; display:flex; align-items:center; justify-content:center; gap:8px;">
+      <i class="fa-solid fa-circle-check"></i> تم تسديد ثمن الشحن بالكامل بالدرهم المغربي (DH)
+    </div>
+
+    <div class="invoice-footer">
+      <p>شكراً لثقتكم بوكالة أطلس للشحن الدولي. لأي استفسار يرجى التواصل عبر الرقم الموحد بالوكالة.</p>
+      <p style="margin-top:6px; font-size:10px; color:#a1a1a6;">Atlas Cargo System - Realm DB Offline Engine v2.1</p>
+    </div>
+  `;
+
+  document.getElementById('invoice-modal').showModal();
+}
+
+// ==========================================================================
+// 8. FINANCIAL REPORTS & EXCEL EXPORTS
+// ==========================================================================
+
+function updateReportDateInputs() {
+  const type = document.getElementById('report-type').value;
+  
+  document.getElementById('report-date-container').style.display = type === 'daily' ? 'block' : 'none';
+  document.getElementById('report-month-container').style.display = type === 'monthly' ? 'block' : 'none';
+  document.getElementById('report-year-container').style.display = type === 'yearly' ? 'block' : 'none';
+
+  generateReportData();
+}
+
+function generateReportData() {
+  const type = document.getElementById('report-type').value;
+  const shipments = realm.objects('Shipment');
+  let filtered = [];
+  let periodName = '';
+
+  if (type === 'daily') {
+    const dateVal = document.getElementById('report-date-input').value;
+    if (!dateVal) return;
+    filtered = shipments.filter(s => s.createdAt.startsWith(dateVal));
+    periodName = `ليوم: ${dateVal}`;
+  } else if (type === 'monthly') {
+    const monthVal = document.getElementById('report-month-input').value; // YYYY-MM
+    if (!monthVal) return;
+    filtered = shipments.filter(s => s.createdAt.startsWith(monthVal));
+    periodName = `لشهر: ${monthVal}`;
+  } else if (type === 'yearly') {
+    const yearVal = document.getElementById('report-year-input').value;
+    filtered = shipments.filter(s => s.createdAt.startsWith(yearVal));
+    periodName = `لسنة: ${yearVal}`;
+  }
+
+  // Filter out cancelled shipments from revenue, but count them in logs
+  const activeShipments = filtered.filter(s => s.status !== 'cancelled');
+  
+  const totalCount = filtered.length;
+  const deliveredCount = filtered.filter(s => s.status === 'delivered').length;
+  const activeCount = activeShipments.length;
+  const cancelledCount = filtered.filter(s => s.status === 'cancelled').length;
+
+  const totalWeight = activeShipments.reduce((sum, s) => sum + s.weight, 0);
+  const grossBilling = activeShipments.reduce((sum, s) => sum + s.shippingPrice, 0);
+  
+  // Simulated Net Profit: 35% of total gross billing (deducting travel charges and custom clearances)
+  const estimatedProfit = grossBilling * 0.35;
+
+  // Render Summary KPI cards
+  const summaryGrid = document.getElementById('report-summary-cards');
+  summaryGrid.innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-info">
+        <span class="kpi-title">الشحنات بالتقرير</span>
+        <span class="kpi-value">${totalCount} شحنات</span>
+      </div>
+      <div class="kpi-icon kpi-all"><i class="fa-solid fa-boxes-stacked"></i></div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-info">
+        <span class="kpi-title">الوزن الإجمالي المشحون</span>
+        <span class="kpi-value">${totalWeight.toFixed(1)} كجم</span>
+      </div>
+      <div class="kpi-icon kpi-transit"><i class="fa-solid fa-weight-scale"></i></div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-info">
+        <span class="kpi-title">مداخيل الشحن (MAD)</span>
+        <span class="kpi-value">${formatMAD(grossBilling)}</span>
+      </div>
+      <div class="kpi-icon kpi-delivered"><i class="fa-solid fa-chart-line"></i></div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-info">
+        <span class="kpi-title">صافي الأرباح المقدرة (35%)</span>
+        <span class="kpi-value" style="color:var(--color-success);">${formatMAD(estimatedProfit)}</span>
+      </div>
+      <div class="kpi-icon kpi-revenue"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+    </div>
+  `;
+
+  // Render Table Body
+  const tableBody = document.getElementById('report-table-body');
+  tableBody.innerHTML = '';
+
+  if (filtered.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد شحنات مسجلة في هذا النطاق الزمني</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(s => {
+    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];
+    const flag = countryObj ? countryObj.flag : '';
+    const countryName = countryObj ? countryObj.countryName : s.destinationCountry;
+
+    tableBody.innerHTML += `
+      <tr>
+        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${s.trackingNumber}</td>
+        <td>${s.createdAt.split('T')[0]}</td>
+        <td><strong>${s.senderName}</strong></td>
+        <td>${s.receiverName}</td>
+        <td>${flag} ${countryName} - ${s.city}</td>
+        <td style="font-family:'Estedad', sans-serif;">${s.weight} كجم</td>
+        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>
+        <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+      </tr>
+    `;
+  });
+}
+
+function printReport() {
+  window.print();
+}
+
+function exportReportToCSV() {
+  const type = document.getElementById('report-type').value;
+  let title = `تقرير_نشاط_وكالة_أطلس_${type}`;
+
+  const rows = [
+    ['رقم التتبع', 'تاريخ الشحن', 'اسم المرسل', 'رقم المرسل', 'اسم المستلم', 'بلد الوجهة', 'المدينة', 'الوزن (كجم)', 'سعر الشحن (درهم)', 'حالة الشحنة']
+  ];
+
+  // Query matching shipments
+  const shipments = realm.objects('Shipment');
+  let filtered = [];
+
+  if (type === 'daily') {
+    const dateVal = document.getElementById('report-date-input').value;
+    filtered = shipments.filter(s => s.createdAt.startsWith(dateVal));
+    title += `_${dateVal}`;
+  } else if (type === 'monthly') {
+    const monthVal = document.getElementById('report-month-input').value;
+    filtered = shipments.filter(s => s.createdAt.startsWith(monthVal));
+    title += `_${monthVal}`;
+  } else if (type === 'yearly') {
+    const yearVal = document.getElementById('report-year-input').value;
+    filtered = shipments.filter(s => s.createdAt.startsWith(yearVal));
+    title += `_${yearVal}`;
+  }
+
+  if (filtered.length === 0) {
+    alert('لا توجد بيانات لتصديرها بالتقرير المختار');
+    return;
+  }
+
+  filtered.forEach(s => {
+    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];
+    const countryName = countryObj ? countryObj.countryName : s.destinationCountry;
+
+    rows.push([
+      s.trackingNumber,
+      s.createdAt.split('T')[0],
+      s.senderName,
+      s.senderPhone,
+      s.receiverName,
+      countryName,
+      s.city,
+      s.weight,
+      s.shippingPrice,
+      STATUS_AR[s.status]
+    ]);
+  });
+
+  // Convert array to CSV string. Use UTF-8 BOM so Excel opens Arabic correctly
+  let csvContent = '\uFEFF'; // UTF-8 BOM
+  rows.forEach(rowArray => {
+    // Escape double quotes and wrap in quotes to preserve commas/newlines
+    const row = rowArray.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
+    csvContent += row + '\r\n';
+  });
+
+  // Download logic
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${title}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// ==========================================================================
+// 9. BACKUP & RESTORE DATABASE
+// ==========================================================================
+
+function triggerDatabaseBackup() {
+  try {
+    const backupJson = realm.exportBackup();
+    
+    // Download logic
+    const blob = new Blob([backupJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `atlas_backup_${dateStr}.json`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (e) {
+    alert('فشل تصدير النسخة الاحتياطية لقاعدة البيانات: ' + e.message);
+  }
+}
+
+function triggerDatabaseRestore() {
+  const fileInput = document.getElementById('backup-file-input');
+  if (!fileInput.files || fileInput.files.length === 0) {
+    alert('يرجى اختيار ملف النسخة الاحتياطية (.json) أولاً.');
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      const jsonContent = e.target.result;
+      const success = realm.importRestore(jsonContent);
+      if (success) {
+        alert('تم استعادة قاعدة البيانات بنجاح! سيتم إعادة تحميل الصفحة لتطبيق التغييرات.');
+        window.location.reload();
+      }
+    } catch (err) {
+      alert('فشل استعادة البيانات. تأكد من صحة وسلامة الملف المختار: ' + err.message);
+    }
+  };
+
+  reader.readAsText(file);
+}
+�*Cfile:///C:/Users/ayoub/Documents/antigravity/magical-maxwell/app.js2F
+<file:///C:/Users/ayoub/Documents/antigravity/magical-maxwellapp.js ��
+������#
+// Initialize Realm DB Database
+
+let realm; 
+// Current Active View State"
+let currentView = 'dashboard';'
+#// Global variables for edit states&
+"let currentEditingCustomer = null;&
+"let currentEditingShipment = null;Q
+M// ==========================================================================4
+0// 1. APPLICATION INITIALIZATION & CORE TRIGGERSQ
+M// ==========================================================================9
+5document.addEventListener('DOMContentLoaded', () => {
+  // Open Database*
+&  realm = window.RealmDatabase.open();
+  
+  // Check User Session
+  checkSession();
+});
+function checkSession() {D
+@  const session = sessionStorage.getItem('atlas_cargo_session');D
+@  const loginOverlay = document.getElementById('login-overlay');<
+8  const appShell = document.getElementById('app-shell');
+  if (session) {,
+(    loginOverlay.style.display = 'none';(
+$    appShell.style.display = 'flex';
+    
+    // Parse user profile)
+%    const user = JSON.parse(session);K
+G    document.getElementById('header-username').textContent = user.name;S
+O    document.getElementById('header-avatar').textContent = user.name.charAt(0);
+    
+    initApp();
+
+  } else {,
+(    loginOverlay.style.display = 'flex';(
+$    appShell.style.display = 'none';
+  }
+}
+function handleLogin() {S
+O  const usernameInput = document.getElementById('login-username').value.trim();L
+H  const passwordInput = document.getElementById('login-password').value;B
+>  const errorMsg = document.getElementById('login-error-msg');/
++  // Query User in Realm Database EmulationU
+Q  const users = realm.objects('User').filtered(`username == '${usernameInput}'`);D
+@  if (users.length > 0 && users[0].password === passwordInput) {
+    const user = users[0];F
+B    sessionStorage.setItem('atlas_cargo_session', JSON.stringify({"
+      username: user.username,
+      name: user.name,
+      role: user.role
+    }));(
+$    errorMsg.style.display = 'none';
+    checkSession();
+
+  } else {)
+%    errorMsg.style.display = 'block';
+  }
+}
+function handleLogout() {7
+3  sessionStorage.removeItem('atlas_cargo_session');
+  checkSession();
+}
+function initApp() {
+  // Reset navigation
+  switchView('dashboard');
+  ;
+7  // Populate country list inputs in the shipment modal'
+#  populateShipmentModalCountries();
+  ;
+7  // Populate country filter dropdown in shipments view'
+#  populateShipmentsCountryFilter();)
+%  // Populate date inputs for reports;
+7  const today = new Date().toISOString().split('T')[0];A
+=  document.getElementById('report-date-input').value = today;1
+-  const currentMonth = today.substring(0, 7);I
+E  document.getElementById('report-month-input').value = currentMonth;
+}
+// Navigation Switcher#
+function switchView(viewName) {&
+"  // Update sidebar menu highlightN
+J  const menuItems = document.querySelectorAll('.sidebar-menu .menu-item');A
+=  menuItems.forEach(item => item.classList.remove('active'));
+  E
+A  const targetMenu = document.getElementById(`menu-${viewName}`);9
+5  if (targetMenu) targetMenu.classList.add('active');
+  // Switch panels>
+:  const panels = document.querySelectorAll('.view-panel');@
+<  panels.forEach(panel => panel.classList.remove('active'));
+  F
+B  const targetPanel = document.getElementById(`view-${viewName}`);;
+7  if (targetPanel) targetPanel.classList.add('active');
+  currentView = viewName;#
+  // Header Title CustomizationC
+?  const pageTitle = document.getElementById('page-view-title');I
+E  const pageSubtitle = document.getElementById('page-view-subtitle');
+  switch (viewName) {
+    case 'dashboard'::
+6      pageTitle.textContent = 'لوحة التحكم';w
+s      pageSubtitle.textContent = 'نظرة عامة على نشاط وكالة الشحن الدولي اليوم';
+      renderDashboard();
+      break;
+    case 'shipments':B
+>      pageTitle.textContent = 'الطرود والشحنات';�
+~      pageSubtitle.textContent = 'إدارة ومتابعة الشحنات والطرود الصادرة إلى أوروبا';
+      renderShipments();
+      break;
+    case 'customers':>
+:      pageTitle.textContent = 'إدارة العملاء';�
+�      pageSubtitle.textContent = 'تسجيل وإدارة العملاء بالوكالة ومراجعة سجلات شحنهم';
+      renderCustomers();
+      break;
+    case 'pricing':X
+T      pageTitle.textContent = 'تعرفة الشحن للدول الأوروبية';�
+}      pageSubtitle.textContent = 'تعديل وتحديد تسعيرة الشحن لكل بلد أوروبي بالدرهم';"
+      renderPricingSettings();
+      break;
+    case 'reports':S
+O      pageTitle.textContent = 'التقارير المالية والنشاط';�
+      pageSubtitle.textContent = 'استعراض تقارير الأرباح والشحنات وتصديرها PDF أو Excel';
+      generateReportData();
+      break;
+    case 'settings':W
+S      pageTitle.textContent = 'الإعدادات والنسخ الاحتياطي';�
+�      pageSubtitle.textContent = 'أدوات الصيانة، النسخ الاحتياطي لقاعدة البيانات واستعادتها';
+      break;
+  }
+}5
+1// Generate unique tracking number (MA-EU-XXXXXX)'
+#function generateTrackingNumber() {!
+  const chars = '0123456789';
+  let random = '';#
+  for (let i = 0; i < 6; i++) {I
+E    random += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `MA-EU-${random}`;
+}.
+*// Generate unique customer ID (CUST-XXXX)#
+function generateCustomerID() {!
+  const chars = '0123456789';
+  let random = '';#
+  for (let i = 0; i < 4; i++) {I
+E    random += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `CUST-${random}`;
+} 
+// Helper to format currency 
+function formatMAD(amount) {/
++  return `${Number(amount).toFixed(2)} DH`;
+}1
+-// Helper to translate status codes to Arabic
+const STATUS_AR = {,
+(  'received': 'قيد الاستلام',.
+*  'processing': 'قيد المعالجة',%
+!  'transit': 'في الطريق',0
+,  'arrived': 'وصلت بلد الوجهة',)
+%  'delivered': 'تم التسليم',
+  'cancelled': 'ملغاة'
+};Q
+M// ==========================================================================
+// 2. DASHBOARD PANEL LOGICQ
+M// ========================================================================== 
+function renderDashboard() {2
+.  const shipments = realm.objects('Shipment');
+  
+  // Compute KPIs*
+&  const totalCount = shipments.length;L
+H  const transitCount = shipments.filtered("status == 'transit'").length;R
+N  const processingCount = shipments.filtered("status == 'processing'").length;N
+J  const receivedCount = shipments.filtered("status == 'received'").length;L
+H  const arrivedCount = shipments.filtered("status == 'arrived'").length;
+  J
+F  const pendingCount = processingCount + receivedCount + arrivedCount;P
+L  const deliveredCount = shipments.filtered("status == 'delivered'").length;P
+L  const cancelledCount = shipments.filtered("status == 'cancelled'").length;]
+Y  // Compute monthly profit (sum prices of delivered/active shipments created this month)
+  const now = new Date();e
+a  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  :
+6  const currentMonthShipments = shipments.filter(s => L
+H    s.createdAt.startsWith(currentYearMonth) && s.status !== 'cancelled'
+  );`
+\  const monthlyRevenue = currentMonthShipments.reduce((sum, s) => sum + s.shippingPrice, 0);
+  // Update UI ElementsN
+J  document.getElementById('kpi-total-shipments').textContent = totalCount;R
+N  document.getElementById('kpi-transit-shipments').textContent = pendingCount;V
+R  document.getElementById('kpi-delivered-shipments').textContent = deliveredCount;V
+R  document.getElementById('kpi-cancelled-shipments').textContent = cancelledCount;]
+Y  document.getElementById('kpi-monthly-profits').textContent = formatMAD(monthlyRevenue);"
+  // Render recent 5 shipmentsN
+J  const sortedShipments = shipments.sorted('createdAt', true).slice(0, 5);Q
+M  const recentTable = document.getElementById('dashboard-recent-table-body');!
+  recentTable.innerHTML = '';)
+%  if (sortedShipments.length === 0) {�
+�    recentTable.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد شحنات مسجلة حالياً بالوكالة</td></tr>`;
+
+  } else {&
+"    sortedShipments.forEach(s => {s
+o      const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];9
+5      const flag = countryObj ? countryObj.flag : '';Y
+U      const countryName = countryObj ? countryObj.countryName : s.destinationCountry;$
+       recentTable.innerHTML += `
+        <tr>�
+~          <td style="font-family:'Estedad', sans-serif; font-weight:700; color:var(--primary-color);">${s.trackingNumber}</td>7
+3          <td><strong>${s.senderName}</strong></td>(
+$          <td>${s.receiverName}</td>
+          <td>*
+&            <div class="country-item">;
+7              <span class="country-flag">${flag}</span>-
+)              <span>${countryName}</span>
+            </div>
+          </td>B
+>          <td>${s.weight} كجم (${s.quantity} طرود)</td>p
+l          <td style="font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>Z
+V          <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+          <td>*
+&            <div class="actions-cell">�
+�              <button class="btn-icon" title="الفاتورة" onclick="openInvoiceModal('${s.trackingNumber}')"><i class="fa-solid fa-file-invoice"></i></button>�
+�              <button class="btn-icon" title="تحديث الحالة" onclick="openStatusModal('${s.trackingNumber}')"><i class="fa-solid fa-route"></i></button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+  }+
+'  // Render country stats progress barsV
+R  const countryBreakdown = document.getElementById('dashboard-country-breakdown');&
+"  countryBreakdown.innerHTML = '';6
+2  // Get active pricing list with shipments mappedS
+O  const countries = realm.objects('CountryPrice').filtered('isActive == true');
+  .
+*  // Calculate shipments count per country
+  const countryStats = [];
+  countries.forEach(c => {\
+X    const count = shipments.filtered(`destinationCountry == '${c.countryCode}'`).length;
+    if (count > 0) {
+      countryStats.push({ 
+        name: c.countryName,
+        flag: c.flag,
+        count: count
+	      });	
+    }	
+  });!
+  // Sort by count descending5
+1  countryStats.sort((a, b) => b.count - a.count);&
+"  if (countryStats.length === 0) {�
+�    countryBreakdown.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-secondary); font-size:12px;">لا توجد إحصائيات شحنات حالياً بالدول</div>`;
+
+  } else {E
+A    const maxCount = Math.max(...countryStats.map(s => s.count));2
+.    countryStats.slice(0, 5).forEach(stat => {=
+9      const percentage = (stat.count / totalCount) * 100;)
+%      countryBreakdown.innerHTML += `G
+C        <div style="display:flex; flex-direction:column; gap:6px;">X
+T          <div style="display:flex; justify-content:space-between; font-size:12px;">O
+K            <span style="font-weight:700;">${stat.flag} ${stat.name}</span>�
+�            <span style="color:var(--text-secondary); font-family:'Estedad', sans-serif; font-weight:700;">${stat.count} شحنات (${percentage.toFixed(0)}%)</span>
+          </div>y
+u          <div style="width:100%; height:8px; background-color:var(--light-bg); border-radius:4px; overflow:hidden;">�
+|            <div style="width:${percentage}%; height:100%; background-color:var(--primary-color); border-radius:4px;"></div>
+          </div>
+        </div>
+      `;
+    });
+  }
+}Q
+M// ========================================================================== 
+// 3. SHIPMENTS LOGIC & CRUDQ
+M// ==========================================================================/
++function populateShipmentModalCountries() {A
+=  const select = document.getElementById('shipment-country');i
+e  const countries = realm.objects('CountryPrice').filtered('isActive == true').sorted('countryName');
+  Z
+V  select.innerHTML = '<option value="">-- اختر دولة الوجهة --</option>';
+  countries.forEach(c => {c
+_    select.innerHTML += `<option value="${c.countryCode}">${c.flag} ${c.countryName}</option>`;	
+  });
+}/
++function populateShipmentsCountryFilter() {H
+D  const select = document.getElementById('shipment-country-filter');i
+e  const countries = realm.objects('CountryPrice').filtered('isActive == true').sorted('countryName');
+  N
+J  select.innerHTML = '<option value="">كل دول أوروبا</option>';
+  countries.forEach(c => {c
+_    select.innerHTML += `<option value="${c.countryCode}">${c.flag} ${c.countryName}</option>`;	
+  });
+} 
+function renderShipments() {
+  filterShipments();
+} 
+function filterShipments() {R
+N  const searchQuery = document.getElementById('shipment-search').value.trim();U
+Q  const countryFilter = document.getElementById('shipment-country-filter').value;S
+O  const statusFilter = document.getElementById('shipment-status-filter').value;
+  0
+,  let shipments = realm.objects('Shipment');
+  // Filter by country
+  if (countryFilter) {S
+O    shipments = shipments.filtered(`destinationCountry == '${countryFilter}'`);
+  }
+  // Filter by status
+  if (statusFilter) {F
+B    shipments = shipments.filtered(`status == '${statusFilter}'`);
+  }
+  // Filter by search text
+  if (searchQuery) {*
+&    shipments = shipments.filter(s => O
+K      s.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||K
+G      s.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||M
+I      s.receiverName.toLowerCase().includes(searchQuery.toLowerCase()) ||B
+>      s.city.toLowerCase().includes(searchQuery.toLowerCase())
+
+    );
+
+  } else {K
+G    // Keep it as RealmResults type for sorting if no JS filter applied8
+4    shipments = shipments.sorted('createdAt', true);
+  }H
+D  const tableBody = document.getElementById('shipments-table-body');
+  tableBody.innerHTML = '';#
+  if (shipments.length === 0) {�
+�    tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-secondary);">لا توجد شحنات مطابقة لخيارات البحث المحددة</td></tr>`;
+    return;
+  }.
+*  // If filtered by search, manual sorting4
+0  if (searchQuery && Array.isArray(shipments)) {P
+L    shipments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+  shipments.forEach(s => {q
+m    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];7
+3    const flag = countryObj ? countryObj.flag : '';W
+S    const countryName = countryObj ? countryObj.countryName : s.destinationCountry; 
+    tableBody.innerHTML += `
+
+      <tr>�
+|        <td style="font-family:'Estedad', sans-serif; font-weight:900; color:var(--primary-color);">${s.trackingNumber}</td>f
+b        <td style="font-size:11px; color:var(--text-secondary);">${s.createdAt.split('T')[0]}</td>
+        <td>A
+=          <div style="font-weight:700;">${s.senderName}</div>^
+Z          <div style="font-size:11px; color:var(--text-secondary);">${s.senderPhone}</div>
+        </td>
+        <td>C
+?          <div style="font-weight:700;">${s.receiverName}</div>`
+\          <div style="font-size:11px; color:var(--text-secondary);">${s.receiverPhone}</div>
+        </td>
+        <td>A
+=          <div class="country-item" style="font-weight:700;">9
+5            <span class="country-flag">${flag}</span>7
+3            <span>${countryName} - ${s.city}</span>
+          </div>�
+�          <div style="font-size:11px; color:var(--text-secondary); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.fullAddress}</div>
+        </td>
+        <td>D
+@          <div style="font-weight:700;">${s.weight} كجم</div>d
+`          <div style="font-size:11px; color:var(--text-secondary);">${s.quantity} طرود</div>
+        </td>�
+�        <td style="font-family:'Estedad', sans-serif; font-weight:800; font-size:14px; color:var(--text-dark);">${formatMAD(s.shippingPrice)}</td>X
+T        <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+        <td>(
+$          <div class="actions-cell">�
+�            <button class="btn-icon" title="الفاتورة" onclick="openInvoiceModal('${s.trackingNumber}')"><i class="fa-solid fa-file-invoice"></i></button>�
+�            <button class="btn-icon" title="تحديث الحالة" onclick="openStatusModal('${s.trackingNumber}')"><i class="fa-solid fa-route"></i></button>�
+�            <button class="btn-icon" title="تعديل" onclick="openEditShipmentModal('${s.trackingNumber}')"><i class="fa-solid fa-pen-to-square"></i></button>�
+�            <button class="btn-icon delete" title="حذف الشحنة" onclick="deleteShipmentData('${s.trackingNumber}')"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        </td>
+      </tr>
+
+    `;	
+  });
+}%
+!function openNewShipmentModal() {$
+   currentEditingShipment = null;h
+d  document.getElementById('shipment-modal-title').textContent = 'تسجيل طرد شحن جديد';
+  
+  // Generate code/
++  const newCode = generateTrackingNumber();Q
+M  document.getElementById('shipment-tracking-display').textContent = newCode;
+  !
+  // Load clients in dropdown:
+6  populateCustomersDropdown('shipment-sender-select');
+  // Reset form7
+3  document.getElementById('shipment-form').reset();=
+9  document.getElementById('shipment-edit-id').value = '';;
+7  document.getElementById('shipment-price').value = '';�
+�  document.getElementById('price-calc-hint').textContent = 'قم باختيار الدولة وتحديد الوزن لحساب التسعير';
+  <
+8  document.getElementById('shipment-modal').showModal();
+}4
+0function openEditShipmentModal(trackingNumber) {f
+b  const shipment = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+  if (!shipment) return;(
+$  currentEditingShipment = shipment;k
+g  document.getElementById('shipment-modal-title').textContent = 'تعديل بيانات الشحنة';a
+]  document.getElementById('shipment-tracking-display').textContent = shipment.trackingNumber;
+  // Load clientsU
+Q  populateCustomersDropdown('shipment-sender-select', shipment.senderCustomerId);
+  // Fill detailsR
+N  document.getElementById('shipment-edit-id').value = shipment.trackingNumber;R
+N  document.getElementById('shipment-sender-name').value = shipment.senderName;T
+P  document.getElementById('shipment-sender-phone').value = shipment.senderPhone;V
+R  document.getElementById('shipment-receiver-name').value = shipment.receiverName;X
+T  document.getElementById('shipment-receiver-phone').value = shipment.receiverPhone;V
+R  document.getElementById('shipment-country').value = shipment.destinationCountry;E
+A  document.getElementById('shipment-city').value = shipment.city;O
+K  document.getElementById('shipment-address').value = shipment.fullAddress;M
+I  document.getElementById('shipment-quantity').value = shipment.quantity;I
+E  document.getElementById('shipment-weight').value = shipment.weight;O
+K  document.getElementById('shipment-price').value = shipment.shippingPrice;I
+E  document.getElementById('shipment-status').value = shipment.status;M
+I  document.getElementById('shipment-notes').value = shipment.notes || '';�
+�  document.getElementById('price-calc-hint').textContent = 'سعر الشحن المعتمد لهذه الشحنة حالياً';<
+8  document.getElementById('shipment-modal').showModal();
+}F
+Bfunction populateCustomersDropdown(selectId, selectedValue = '') {7
+3  const select = document.getElementById(selectId);A
+=  const customers = realm.objects('Customer').sorted('name');
+  ^
+Z  select.innerHTML = '<option value="">-- اختر عميلاً مرسلاً --</option>';
+  customers.forEach(c => {B
+>    const selected = c.id === selectedValue ? 'selected' : '';b
+^    select.innerHTML += `<option value="${c.id}" ${selected}>${c.name} (${c.phone})</option>`;	
+  });
+}#
+function autoFillSenderInfo() {G
+C  const select = document.getElementById('shipment-sender-select');&
+"  const customerId = select.value;
+  H
+D  const nameInput = document.getElementById('shipment-sender-name');J
+F  const phoneInput = document.getElementById('shipment-sender-phone');
+  if (customerId) {T
+P    const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+    if (cust) {&
+"      nameInput.value = cust.name;(
+$      phoneInput.value = cust.phone;	
+    }
+
+  } else {
+    nameInput.value = '';
+    phoneInput.value = '';
+  }
+}'
+#function calculateShippingPrice() {L
+H  const countryCode = document.getElementById('shipment-country').value;Z
+V  const weightVal = parseFloat(document.getElementById('shipment-weight').value) || 0;\
+X  const quantityVal = parseInt(document.getElementById('shipment-quantity').value) || 1;C
+?  const priceInput = document.getElementById('shipment-price');B
+>  const calcHint = document.getElementById('price-calc-hint');+
+'  if (!countryCode || weightVal <= 0) {
+    return;
+  }0
+,  // Get country price metrics from Realm DB`
+\  const rate = realm.objects('CountryPrice').filtered(`countryCode == '${countryCode}'`)[0];
+  if (!rate) return;^
+Z  // Pricing Rule: Base Price covers the first package, additional weights add cost per Kg@
+<  // Surcharge of 10% per additional package if quantity > 1F
+B  let finalPrice = rate.basePrice + (weightVal * rate.pricePerKg);
+  if (quantityVal > 1) {R
+N    finalPrice += (quantityVal - 1) * 15; // flat 15 DH for each extra package
+  }*
+&  finalPrice = Math.round(finalPrice);$
+   priceInput.value = finalPrice;�
+�  calcHint.textContent = `السعر التلقائي: الأساسي (${rate.basePrice} DH) + الوزن (${rate.pricePerKg} DH/كجم) + الطرود الإضافية.`;
+}!
+function saveShipmentData() {G
+C  const editId = document.getElementById('shipment-edit-id').value;O
+K  const senderId = document.getElementById('shipment-sender-select').value;O
+K  const senderName = document.getElementById('shipment-sender-name').value;Q
+M  const senderPhone = document.getElementById('shipment-sender-phone').value;
+  Z
+V  const receiverName = document.getElementById('shipment-receiver-name').value.trim();\
+X  const receiverPhone = document.getElementById('shipment-receiver-phone').value.trim();S
+O  const destinationCountry = document.getElementById('shipment-country').value;I
+E  const city = document.getElementById('shipment-city').value.trim();S
+O  const fullAddress = document.getElementById('shipment-address').value.trim();Y
+U  const quantity = parseInt(document.getElementById('shipment-quantity').value) || 1;W
+S  const weight = parseFloat(document.getElementById('shipment-weight').value) || 1;]
+Y  const shippingPrice = parseFloat(document.getElementById('shipment-price').value) || 0;F
+B  const status = document.getElementById('shipment-status').value;K
+G  const notes = document.getElementById('shipment-notes').value.trim();"
+  let trackingNumber = editId;
+  realm.write(() => {
+    if (editId) {
+      // Edit[
+W      const s = realm.objects('Shipment').filtered(`trackingNumber == '${editId}'`)[0];
+      if (s) {6
+2        // If status changed, push to history logs&
+"        if (s.status !== status) {$
+           s.statusHistory.push({
+            status: status,/
++            date: new Date().toISOString(),A
+=            note: 'تم تعديل تفاصيل الحالة'
+          });
+	        }
+        *
+&        s.receiverName = receiverName;,
+(        s.receiverPhone = receiverPhone;6
+2        s.destinationCountry = destinationCountry;
+        s.city = city;(
+$        s.fullAddress = fullAddress;"
+        s.quantity = quantity;
+        s.weight = weight;,
+(        s.shippingPrice = shippingPrice;
+        s.status = status;
+        s.notes = notes;
+      }
+    } else {
+      // New\
+X      trackingNumber = document.getElementById('shipment-tracking-display').textContent;
+
+      
+      const newShipment = {+
+'        trackingNumber: trackingNumber,#
+        senderName: senderName,%
+!        senderPhone: senderPhone,'
+#        senderCustomerId: senderId,'
+#        receiverName: receiverName,)
+%        receiverPhone: receiverPhone,3
+/        destinationCountry: destinationCountry,
+        city: city,%
+!        fullAddress: fullAddress,
+        weight: weight,
+        quantity: quantity,)
+%        shippingPrice: shippingPrice,
+        status: status,0
+,        createdAt: new Date().toISOString(),
+        statusHistory: [{
+          status: status,-
+)          date: new Date().toISOString(),@
+<          note: 'تسجيل الشحنة بالمستودع'
+        }],
+        notes: notes
+      };
+
+      0
+,      realm.create('Shipment', newShipment);0
+,      // Increment customer's shipmentsCount[
+W      const customerObj = realm.objects('Customer').filtered(`id == '${senderId}'`)[0];
+      if (customerObj) {,
+(        customerObj.shipmentsCount += 1;
+      }@
+<      // Also create an invoice automatically for the clientx
+t      const invoiceNum = `FAC-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${trackingNumber.slice(-4)}`;
+      const newInvoice = {&
+"        invoiceNumber: invoiceNum,3
+/        shipmentTrackingNumber: trackingNumber,!
+        customerId: senderId,%
+!        customerName: senderName,'
+#        totalAmount: shippingPrice,=
+9        paymentStatus: 'paid', // Default paid on receipt"
+        paymentMethod: 'cash',/
++        createdAt: new Date().toISOString()
+      };.
+*      realm.create('Invoice', newInvoice);	
+    }	
+  });8
+4  document.getElementById('shipment-modal').close();
+  
+  // Refresh views(
+$  if (currentView === 'dashboard') {
+    renderDashboard();/
++  } else if (currentView === 'shipments') {
+    renderShipments();
+  }
+}1
+-function deleteShipmentData(trackingNumber) {�
+�  if (confirm(`هل أنت متأكد من حذف الشحنة رقم ${trackingNumber} نهائياً من قاعدة البيانات؟`)) {a
+]    const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+    if (s) {
+      realm.write(() => {.
+*        // Decrement client shipmentsCountg
+c        const customerObj = realm.objects('Customer').filtered(`id == '${s.senderCustomerId}'`)[0];@
+<        if (customerObj && customerObj.shipmentsCount > 0) {.
+*          customerObj.shipmentsCount -= 1;
+	        }$
+         // Delete linked invoicep
+l        const invoices = realm.objects('Invoice').filtered(`shipmentTrackingNumber == '${trackingNumber}'`);#
+        realm.delete(invoices);
+        // Delete shipment
+        realm.delete(s);
+	      });
+
+      ,
+(      if (currentView === 'dashboard') {
+        renderDashboard();3
+/      } else if (currentView === 'shipments') {
+        renderShipments();
+      }	
+    }
+  }
+}Q
+M// ==========================================================================)
+%// 4. SHIPMENTS STATUS HISTORY UPDATEQ
+M// ==========================================================================.
+*function openStatusModal(trackingNumber) {_
+[  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+  if (!s) return;O
+K  document.getElementById('status-update-tracking').value = trackingNumber;G
+C  document.getElementById('status-update-select').value = s.status;?
+;  document.getElementById('status-update-note').value = '';:
+6  document.getElementById('status-modal').showModal();
+}!
+function saveStatusUpdate() {U
+Q  const trackingNumber = document.getElementById('status-update-tracking').value;N
+J  const newStatus = document.getElementById('status-update-select').value;�
+�  const noteText = document.getElementById('status-update-note').value.trim() || 'تحديث روتيني لحالة الشحن';_
+[  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+
+  if (s) {
+    realm.write(() => {
+      s.status = newStatus; 
+      s.statusHistory.push({
+        status: newStatus,+
+'        date: new Date().toISOString(),
+        note: noteText
+	      });
+    });
+  }6
+2  document.getElementById('status-modal').close();(
+$  if (currentView === 'dashboard') {
+    renderDashboard();/
++  } else if (currentView === 'shipments') {
+    renderShipments();
+  }
+}Q
+M// ==========================================================================#
+// 5. CUSTOMERS PANEL & HISTORYQ
+M// ========================================================================== 
+function renderCustomers() {
+  filterCustomers();
+} 
+function filterCustomers() {R
+N  const searchQuery = document.getElementById('customer-search').value.trim();0
+,  let customers = realm.objects('Customer');
+  if (searchQuery) {*
+&    customers = customers.filter(c => E
+A      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||*
+&      c.phone.includes(searchQuery) ||G
+C      c.moroccoId.toLowerCase().includes(searchQuery.toLowerCase())
+
+    );
+
+  } else {-
+)    customers = customers.sorted('name');
+  }H
+D  const tableBody = document.getElementById('customers-table-body');
+  tableBody.innerHTML = '';#
+  if (customers.length === 0) {�
+�    tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-secondary);">لا توجد عملاء مسجلين يطابقون مدخلات البحث</td></tr>`;
+    return;
+  }
+  customers.forEach(c => { 
+    tableBody.innerHTML += `
+
+      <tr>X
+T        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${c.id}</td>/
++        <td><strong>${c.name}</strong></td>H
+D        <td style="direction:ltr; text-align:right;">${c.phone}</td>Y
+U        <td>${c.email || '<span style="color:var(--text-secondary);">--</span>'}</td>�
+�        <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${c.address || '<span style="color:var(--text-secondary);">--</span>'}</td>_
+[        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${c.moroccoId}</td>f
+b        <td style="font-size:11px; color:var(--text-secondary);">${c.createdAt.split('T')[0]}</td>o
+k        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${c.shipmentsCount} شحنات</td>
+        <td>(
+$          <div class="actions-cell">�
+�            <button class="btn-icon" title="سجل الشحنات" onclick="openCustomerHistory('${c.id}')"><i class="fa-solid fa-list-check"></i></button>�
+�            <button class="btn-icon" title="تعديل" onclick="openEditCustomerModal('${c.id}')"><i class="fa-solid fa-pen-to-square"></i></button>�
+�            <button class="btn-icon delete" title="حذف العميل" onclick="deleteCustomerData('${c.id}')"><i class="fa-solid fa-user-xmark"></i></button>
+          </div>
+        </td>
+      </tr>
+
+    `;	
+  });
+}%
+!function openNewCustomerModal() {$
+   currentEditingCustomer = null;t
+p  document.getElementById('customer-modal-title').textContent = 'إضافة عميل جديد بالوكالة';7
+3  document.getElementById('customer-form').reset();=
+9  document.getElementById('customer-edit-id').value = '';<
+8  document.getElementById('customer-modal').showModal();
+}0
+,function openEditCustomerModal(customerId) {R
+N  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+  if (!cust) return;$
+   currentEditingCustomer = cust;k
+g  document.getElementById('customer-modal-title').textContent = 'تعديل بيانات العميل';
+  B
+>  document.getElementById('customer-edit-id').value = cust.id;A
+=  document.getElementById('customer-name').value = cust.name;C
+?  document.getElementById('customer-phone').value = cust.phone;I
+E  document.getElementById('customer-email').value = cust.email || '';L
+H  document.getElementById('customer-morocco-id').value = cust.moroccoId;M
+I  document.getElementById('customer-address').value = cust.address || '';<
+8  document.getElementById('customer-modal').showModal();
+}!
+function saveCustomerData() {G
+C  const editId = document.getElementById('customer-edit-id').value;I
+E  const name = document.getElementById('customer-name').value.trim();K
+G  const phone = document.getElementById('customer-phone').value.trim();K
+G  const email = document.getElementById('customer-email').value.trim();b
+^  const moroccoId = document.getElementById('customer-morocco-id').value.trim().toUpperCase();O
+K  const address = document.getElementById('customer-address').value.trim();
+  realm.write(() => {
+    if (editId) {
+      // Edit CustomerR
+N      const cust = realm.objects('Customer').filtered(`id == '${editId}'`)[0];
+      if (cust) {8
+4        // Cascaded update in shipments name & phonej
+f        const linkedShipments = realm.objects('Shipment').filtered(`senderCustomerId == '${editId}'`);*
+&        linkedShipments.forEach(s => {"
+          s.senderName = name;$
+           s.senderPhone = phone;
+        });b
+^        const linkedInvoices = realm.objects('Invoice').filtered(`customerId == '${editId}'`);+
+'        linkedInvoices.forEach(inv => {&
+"          inv.customerName = name;
+        });
+        cust.name = name;
+        cust.phone = phone;
+        cust.email = email;'
+#        cust.moroccoId = moroccoId;#
+        cust.address = address;
+      }
+    } else {
+      // Create Customer
+      const newCust = {%
+!        id: generateCustomerID(),
+        name: name,
+        phone: phone,
+        email: email,
+        address: address,!
+        moroccoId: moroccoId,0
+,        createdAt: new Date().toISOString(),
+        shipmentsCount: 0
+      };
+
+      ,
+(      realm.create('Customer', newCust);	
+    }	
+  });8
+4  document.getElementById('customer-modal').close();
+  (
+$  if (currentView === 'customers') {
+    renderCustomers();
+  }
+}-
+)function deleteCustomerData(customerId) {R
+N  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+  if (!cust) return;$
+   if (cust.shipmentsCount > 0) {�
+�    alert(`لا يمكن حذف هذا العميل نظراً لوجود عدد (${cust.shipmentsCount}) شحنات مسجلة باسمه في النظام.`);
+    return;
+  }�
+�  if (confirm(`هل أنت متأكد من حذف العميل "${cust.name}" بالكامل من قاعدة البيانات؟`)) {
+    realm.write(() => {
+      realm.delete(cust);
+    });
+    renderCustomers();
+  }
+}.
+*function openCustomerHistory(customerId) {R
+N  const cust = realm.objects('Customer').filtered(`id == '${customerId}'`)[0];
+  if (!cust) return;r
+n  document.getElementById('history-modal-title').textContent = `سجل شحنات العميل: ${cust.name}`;|
+x  const shipments = realm.objects('Shipment').filtered(`senderCustomerId == '${customerId}'`).sorted('createdAt', true);F
+B  const tableBody = document.getElementById('history-table-body');
+  tableBody.innerHTML = '';#
+  if (shipments.length === 0) {�
+�    tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد شحنات سابقة مسجلة باسم هذا العميل</td></tr>`;
+
+  } else { 
+    shipments.forEach(s => {s
+o      const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];9
+5      const flag = countryObj ? countryObj.flag : '';Y
+U      const countryName = countryObj ? countryObj.countryName : s.destinationCountry;"
+      tableBody.innerHTML += `
+        <tr>�
+~          <td style="font-family:'Estedad', sans-serif; font-weight:700; color:var(--primary-color);">${s.trackingNumber}</td>K
+G          <td style="font-size:11px;">${s.createdAt.split('T')[0]}</td>9
+5          <td><strong>${s.receiverName}</strong></td>-
+)          <td>${flag} ${countryName}</td>)
+%          <td>${s.weight} كجم</td>p
+l          <td style="font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>Z
+V          <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+        </tr>
+      `;
+    });
+  };
+7  document.getElementById('history-modal').showModal();
+}Q
+M// ========================================================================== 
+// 6. PRICING SETTINGS LOGICQ
+M// ==========================================================================&
+"function renderPricingSettings() {
+  filterPricingList();
+}"
+function filterPricingList() {Q
+M  const searchQuery = document.getElementById('pricing-search').value.trim();4
+0  let countries = realm.objects('CountryPrice');
+  if (searchQuery) {*
+&    countries = countries.filter(c => L
+H      c.countryName.toLowerCase().includes(searchQuery.toLowerCase()) ||I
+E      c.countryCode.toLowerCase().includes(searchQuery.toLowerCase())
+
+    );
+
+  } else {4
+0    countries = countries.sorted('countryName');
+  }R
+N  const container = document.getElementById('country-pricing-list-container');
+  container.innerHTML = '';#
+  if (countries.length === 0) {�
+�    container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد دول مطابقة لمدخلات البحث</div>`;
+    return;
+  }
+  countries.forEach(c => { 
+    container.innerHTML += `E
+A      <div class="pricing-row" id="pricing-row-${c.countryCode}">)
+%        <div class="country-details"><
+8          <span style="font-size:24px;">${c.flag}</span>
+          <div>T
+P            <div style="font-weight:800; font-size:14px;">${c.countryName}</div>�
+�            <span style="font-size:10px; font-family:'Estedad', sans-serif; background-color:#eaeaea; padding:2px 6px; border-radius:4px;">${c.countryCode}</span>
+          </div>
+        </div>
+        (
+$        <div class="pricing-inputs">,
+(          <div class="mini-input-group">C
+?            <label>التعرفة الأساسية (DH)</label>p
+l            <input type="number" id="base-price-${c.countryCode}" class="mini-input" value="${c.basePrice}">
+          </div>
+
+          ,
+(          <div class="mini-input-group">F
+B            <label>سعر الكيلو الإضافي (DH)</label>m
+i            <input type="number" id="per-kg-${c.countryCode}" class="mini-input" value="${c.pricePerKg}">
+          </div>
+
+          �
+�          <button class="btn-primary" style="padding: 8px 16px; font-size:11px;" onclick="saveCountryPriceRate('${c.countryCode}')">>
+:            <i class="fa-solid fa-floppy-disk"></i> حفظ
+          </button>
+        </div>
+      </div>
+
+    `;	
+  });
+}0
+,function saveCountryPriceRate(countryCode) {g
+c  const basePriceVal = parseFloat(document.getElementById(`base-price-${countryCode}`).value) || 0;_
+[  const perKgVal = parseFloat(document.getElementById(`per-kg-${countryCode}`).value) || 0;`
+\  const rate = realm.objects('CountryPrice').filtered(`countryCode == '${countryCode}'`)[0];
+  if (rate) {
+    realm.write(() => {(
+$      rate.basePrice = basePriceVal;%
+!      rate.pricePerKg = perKgVal;
+    });&
+"    // Subtle micro feedback alertJ
+F    const row = document.getElementById(`pricing-row-${countryCode}`);7
+3    row.style.borderColor = 'var(--color-success)';.
+*    row.style.backgroundColor = '#e8f5e9';
+    
+    setTimeout(() => {8
+4      row.style.borderColor = 'var(--border-light)';8
+4      row.style.backgroundColor = 'var(--light-bg)';
+    }, 1500);
+  }
+}Q
+M// ==========================================================================*
+&// 7. INVOICE GENERATOR & PRINT LAYOUTQ
+M// ==========================================================================/
++function openInvoiceModal(trackingNumber) {_
+[  const s = realm.objects('Shipment').filtered(`trackingNumber == '${trackingNumber}'`)[0];
+  if (!s) return;l
+h  const invoice = realm.objects('Invoice').filtered(`shipmentTrackingNumber == '${trackingNumber}'`)[0];b
+^  const invoiceNum = invoice ? invoice.invoiceNumber : `FAC-TEMP-${trackingNumber.slice(-4)}`;o
+k  const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];5
+1  const flag = countryObj ? countryObj.flag : '';U
+Q  const countryName = countryObj ? countryObj.countryName : s.destinationCountry;M
+I  const invoicePrintArea = document.getElementById('invoice-print-area');
+  $
+   invoicePrintArea.innerHTML = `$
+     <div class="invoice-header">,
+(      <div class="invoice-logo-section">&
+"        <div class="invoice-logo">5
+1          <i class="fa-solid fa-paper-plane"></i>
+        </div>
+        <div>V
+R          <h1 class="invoice-company-name">وكالة أطلس إكسبريس</h1>z
+v          <p class="invoice-company-sub">لنقل الطرود والشحنات الدولية نحو أوروبا</p>
+        </div>
+      </div>$
+       <div class="invoice-meta">D
+@        <h2 class="invoice-title-text">وصل شحن طرد</h2>�
+�        <div class="invoice-number">رقم الفاتورة: <span style="font-family:'Estedad', sans-serif;">${invoiceNum}</span></div>c
+_        <div class="invoice-date">تاريخ الإرسال: ${s.createdAt.split('T')[0]}</div>
+      </div>
+
+    </div>%
+!    <div class="invoice-parties">!
+      <div class="party-box">F
+B        <div class="party-title">المرسل (المغرب)</div>9
+5        <div class="party-name">${s.senderName}</div>'
+#        <div class="party-details">9
+5          <span>الهاتف: ${s.senderPhone}</span>J
+F          <span>الهوية الوطنية: ${s.notes || '--'}</span>
+        </div>
+      </div>!
+      <div class="party-box">H
+D        <div class="party-title">المستلم (أوروبا)</div>;
+7        <div class="party-name">${s.receiverName}</div>'
+#        <div class="party-details">=
+9          <span>البلد: ${flag} ${countryName}</span>4
+0          <span>المدينة: ${s.city}</span>;
+7          <span>الهاتف: ${s.receiverPhone}</span>;
+7          <span>العنوان: ${s.fullAddress}</span>
+        </div>
+      </div>
+
+    </div>%
+!    <table class="invoice-table">
+      <thead>
+        <tr>?
+;          <th>تفاصيل الشحنة والخدمة</th><
+8          <th style="text-align:center;">الوزن</th>E
+A          <th style="text-align:center;">عدد الطرود</th>I
+E          <th style="text-align:left;">المبلغ الفرعي</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>M
+I            <strong>شحن دولي جوي وبري سريع</strong><br>�
+�            <span style="font-size:11px; color:#555;">من المغرب نحو ${countryName} (رقم التتبع: ${s.trackingNumber})</span>
+          </td>g
+c          <td style="text-align:center; font-family:'Estedad', sans-serif;">${s.weight} كجم</td>b
+^          <td style="text-align:center; font-family:'Estedad', sans-serif;">${s.quantity}</td>�
+}          <td style="text-align:left; font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>
+        </tr>
+      </tbody>
+    </table>$
+     <div class="invoice-totals">!
+      <div class="total-row">@
+<        <span>السعر الخاضع للضريبة:</span>g
+c        <span style="font-family:'Estedad', sans-serif;">${formatMAD(s.shippingPrice * 0.8)}</span>
+      </div>!
+      <div class="total-row">=
+9        <span>الضريبة المضافة (20%):</span>g
+c        <span style="font-family:'Estedad', sans-serif;">${formatMAD(s.shippingPrice * 0.2)}</span>
+      </div>-
+)      <div class="total-row grand-total">9
+5        <span>المجموع الإجمالي:</span>a
+]        <span style="font-family:'Estedad', sans-serif;">${formatMAD(s.shippingPrice)}</span>
+      </div>
+
+    </div>�
+�    <div style="background-color:#e8f5e9; border:1px solid #c8e6c9; border-radius:8px; padding:12px; margin-bottom:30px; text-align:center; font-weight:700; color:#2e7d32; display:flex; align-items:center; justify-content:center; gap:8px;">�
+�      <i class="fa-solid fa-circle-check"></i> تم تسديد ثمن الشحن بالكامل بالدرهم المغربي (DH)
+
+    </div>$
+     <div class="invoice-footer">�
+�      <p>شكراً لثقتكم بوكالة أطلس للشحن الدولي. لأي استفسار يرجى التواصل عبر الرقم الموحد بالوكالة.</p>y
+u      <p style="margin-top:6px; font-size:10px; color:#a1a1a6;">Atlas Cargo System - Realm DB Offline Engine v2.1</p>
+
+    </div>
+  `;;
+7  document.getElementById('invoice-modal').showModal();
+}Q
+M// ==========================================================================+
+'// 8. FINANCIAL REPORTS & EXCEL EXPORTSQ
+M// =========================================================================='
+#function updateReportDateInputs() {@
+<  const type = document.getElementById('report-type').value;
+  k
+g  document.getElementById('report-date-container').style.display = type === 'daily' ? 'block' : 'none';n
+j  document.getElementById('report-month-container').style.display = type === 'monthly' ? 'block' : 'none';l
+h  document.getElementById('report-year-container').style.display = type === 'yearly' ? 'block' : 'none';
+  generateReportData();
+}#
+function generateReportData() {@
+<  const type = document.getElementById('report-type').value;2
+.  const shipments = realm.objects('Shipment');
+  let filtered = [];
+  let periodName = '';
+  if (type === 'daily') {K
+G    const dateVal = document.getElementById('report-date-input').value;
+    if (!dateVal) return;J
+F    filtered = shipments.filter(s => s.createdAt.startsWith(dateVal));,
+(    periodName = `ليوم: ${dateVal}`;&
+"  } else if (type === 'monthly') {X
+T    const monthVal = document.getElementById('report-month-input').value; // YYYY-MM
+    if (!monthVal) return;K
+G    filtered = shipments.filter(s => s.createdAt.startsWith(monthVal));-
+)    periodName = `لشهر: ${monthVal}`;%
+!  } else if (type === 'yearly') {K
+G    const yearVal = document.getElementById('report-year-input').value;J
+F    filtered = shipments.filter(s => s.createdAt.startsWith(yearVal));,
+(    periodName = `لسنة: ${yearVal}`;
+  }L
+H  // Filter out cancelled shipments from revenue, but count them in logsM
+I  const activeShipments = filtered.filter(s => s.status !== 'cancelled');
+  )
+%  const totalCount = filtered.length;S
+O  const deliveredCount = filtered.filter(s => s.status === 'delivered').length;1
+-  const activeCount = activeShipments.length;S
+O  const cancelledCount = filtered.filter(s => s.status === 'cancelled').length;P
+L  const totalWeight = activeShipments.reduce((sum, s) => sum + s.weight, 0);X
+T  const grossBilling = activeShipments.reduce((sum, s) => sum + s.shippingPrice, 0);
+  j
+f  // Simulated Net Profit: 35% of total gross billing (deducting travel charges and custom clearances)2
+.  const estimatedProfit = grossBilling * 0.35;!
+  // Render Summary KPI cardsJ
+F  const summaryGrid = document.getElementById('report-summary-cards');
+  summaryGrid.innerHTML = `
+    <div class="kpi-card"> 
+      <div class="kpi-info">J
+F        <span class="kpi-title">الشحنات بالتقرير</span>C
+?        <span class="kpi-value">${totalCount} شحنات</span>
+      </div>W
+S      <div class="kpi-icon kpi-all"><i class="fa-solid fa-boxes-stacked"></i></div>
+
+    </div>
+    <div class="kpi-card"> 
+      <div class="kpi-info">U
+Q        <span class="kpi-title">الوزن الإجمالي المشحون</span>K
+G        <span class="kpi-value">${totalWeight.toFixed(1)} كجم</span>
+      </div>Z
+V      <div class="kpi-icon kpi-transit"><i class="fa-solid fa-weight-scale"></i></div>
+
+    </div>
+    <div class="kpi-card"> 
+      <div class="kpi-info">H
+D        <span class="kpi-title">مداخيل الشحن (MAD)</span>E
+A        <span class="kpi-value">${formatMAD(grossBilling)}</span>
+      </div>Z
+V      <div class="kpi-icon kpi-delivered"><i class="fa-solid fa-chart-line"></i></div>
+
+    </div>
+    <div class="kpi-card"> 
+      <div class="kpi-info">W
+S        <span class="kpi-title">صافي الأرباح المقدرة (35%)</span>l
+h        <span class="kpi-value" style="color:var(--color-success);">${formatMAD(estimatedProfit)}</span>
+      </div>a
+]      <div class="kpi-icon kpi-revenue"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+
+    </div>
+  `;
+  // Render Table BodyE
+A  const tableBody = document.getElementById('report-table-body');
+  tableBody.innerHTML = '';"
+  if (filtered.length === 0) {�
+�    tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-secondary);">لا توجد شحنات مسجلة في هذا النطاق الزمني</td></tr>`;
+    return;
+  }
+  filtered.forEach(s => {q
+m    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];7
+3    const flag = countryObj ? countryObj.flag : '';W
+S    const countryName = countryObj ? countryObj.countryName : s.destinationCountry; 
+    tableBody.innerHTML += `
+
+      <tr>d
+`        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${s.trackingNumber}</td>1
+-        <td>${s.createdAt.split('T')[0]}</td>5
+1        <td><strong>${s.senderName}</strong></td>&
+"        <td>${s.receiverName}</td>7
+3        <td>${flag} ${countryName} - ${s.city}</td>R
+N        <td style="font-family:'Estedad', sans-serif;">${s.weight} كجم</td>n
+j        <td style="font-family:'Estedad', sans-serif; font-weight:700;">${formatMAD(s.shippingPrice)}</td>X
+T        <td><span class="badge badge-${s.status}">${STATUS_AR[s.status]}</span></td>
+      </tr>
+
+    `;	
+  });
+}
+function printReport() {
+  window.print();
+}"
+function exportReportToCSV() {@
+<  const type = document.getElementById('report-type').value;D
+@  let title = `تقرير_نشاط_وكالة_أطلس_${type}`;
+  const rows = [�
+�    ['رقم التتبع', 'تاريخ الشحن', 'اسم المرسل', 'رقم المرسل', 'اسم المستلم', 'بلد الوجهة', 'المدينة', 'الوزن (كجم)', 'سعر الشحن (درهم)', 'حالة الشحنة']
+  ];!
+  // Query matching shipments2
+.  const shipments = realm.objects('Shipment');
+  let filtered = [];
+  if (type === 'daily') {K
+G    const dateVal = document.getElementById('report-date-input').value;J
+F    filtered = shipments.filter(s => s.createdAt.startsWith(dateVal));
+    title += `_${dateVal}`;&
+"  } else if (type === 'monthly') {M
+I    const monthVal = document.getElementById('report-month-input').value;K
+G    filtered = shipments.filter(s => s.createdAt.startsWith(monthVal)); 
+    title += `_${monthVal}`;%
+!  } else if (type === 'yearly') {K
+G    const yearVal = document.getElementById('report-year-input').value;J
+F    filtered = shipments.filter(s => s.createdAt.startsWith(yearVal));
+    title += `_${yearVal}`;
+  }"
+  if (filtered.length === 0) {]
+Y    alert('لا توجد بيانات لتصديرها بالتقرير المختار');
+    return;
+  }
+  filtered.forEach(s => {q
+m    const countryObj = realm.objects('CountryPrice').filtered(`countryCode == '${s.destinationCountry}'`)[0];W
+S    const countryName = countryObj ? countryObj.countryName : s.destinationCountry;
+    rows.push([
+      s.trackingNumber,$
+       s.createdAt.split('T')[0],
+      s.senderName,
+      s.senderPhone,
+      s.receiverName,
+      countryName,
+      s.city,
+      s.weight,
+      s.shippingPrice,
+      STATUS_AR[s.status]
+    ]);	
+  });S
+O  // Convert array to CSV string. Use UTF-8 BOM so Excel opens Arabic correctly-
+)  let csvContent = '\uFEFF'; // UTF-8 BOM 
+  rows.forEach(rowArray => {N
+J    // Escape double quotes and wrap in quotes to preserve commas/newlinesZ
+V    const row = rowArray.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');#
+    csvContent += row + '\r\n';	
+  });
+  // Download logicO
+K  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });,
+(  const url = URL.createObjectURL(blob);/
++  const link = document.createElement('a');%
+!  link.setAttribute('href', url);4
+0  link.setAttribute('download', `${title}.csv`);'
+#  link.style.visibility = 'hidden';&
+"  document.body.appendChild(link);
+  link.click();&
+"  document.body.removeChild(link);
+}Q
+M// ==========================================================================#
+// 9. BACKUP & RESTORE DATABASEQ
+M// ==========================================================================&
+"function triggerDatabaseBackup() {
+  try {0
+,    const backupJson = realm.exportBackup();
+    
+    // Download logicJ
+F    const blob = new Blob([backupJson], { type: 'application/json' });.
+*    const url = URL.createObjectURL(blob);1
+-    const link = document.createElement('a');
+    >
+:    const dateStr = new Date().toISOString().slice(0, 10);'
+#    link.setAttribute('href', url);F
+B    link.setAttribute('download', `atlas_backup_${dateStr}.json`);)
+%    link.style.visibility = 'hidden';(
+$    document.body.appendChild(link);
+    link.click();(
+$    document.body.removeChild(link);
+  } catch (e) {q
+m    alert('فشل تصدير النسخة الاحتياطية لقاعدة البيانات: ' + e.message);
+  }
+}'
+#function triggerDatabaseRestore() {E
+A  const fileInput = document.getElementById('backup-file-input');=
+9  if (!fileInput.files || fileInput.files.length === 0) {d
+`    alert('يرجى اختيار ملف النسخة الاحتياطية (.json) أولاً.');
+    return;
+  }&
+"  const file = fileInput.files[0];&
+"  const reader = new FileReader();#
+  reader.onload = function(e) {
+	    try {.
+*      const jsonContent = e.target.result;;
+7      const success = realm.importRestore(jsonContent);
+      if (success) {�
+�        alert('تم استعادة قاعدة البيانات بنجاح! سيتم إعادة تحميل الصفحة لتطبيق التغييرات.');%
+!        window.location.reload();
+      }
+    } catch (err) {�
+�      alert('فشل استعادة البيانات. تأكد من صحة وسلامة الملف المختار: ' + err.message);	
+    }
+  };
+  reader.readAsText(file);
+}BCfile:///C:/Users/ayoub/Documents/antigravity/magical-maxwell/app.jsX ���Complete app.js frontend logic containing database linkages, customer CRUD, parcel logging with automatic tracking IDs, dynamic country rate lookups, status updates, invoice generators, Excel exporters, backup utilities, and login handling."������.��Create client-side application app.js to control dynamic view switching, client updates, shipment logic, automatic price calculating, receipts previewing, Excel reports generating, and local backup utility.
