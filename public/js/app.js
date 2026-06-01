@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         reader.readAsDataURL(file);
       }
+    });
   }
 
   const clientSelect = document.getElementById('sale-client-id');
