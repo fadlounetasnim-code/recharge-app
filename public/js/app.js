@@ -159,7 +159,11 @@ function checkActiveSession() {
   if (active) {
     setupAuthenticatedState();
   } else {
-    document.getElementById('auth-view').style.display = 'block';
+    const authView = document.getElementById('view-auth');
+    if (authView) {
+      authView.classList.add('active');
+      authView.style.display = 'flex';
+    }
     document.getElementById('app-view').style.display = 'none';
     if (loader) loader.style.display = 'none';
   }
@@ -186,7 +190,11 @@ function setupAuthenticatedState() {
   const role = Auth.getUserRole();
   const loader = document.getElementById('loading-overlay');
 
-  document.getElementById('auth-view').style.display = 'none';
+  const authView = document.getElementById('view-auth');
+  if (authView) {
+    authView.classList.remove('active');
+    authView.style.display = 'none';
+  }
   document.getElementById('app-view').style.display = 'grid';
 
   // Fill user profile labels
@@ -235,7 +243,11 @@ function setupAuthenticatedState() {
 // Trigger Logout session
 async function triggerLogout() {
   await Auth.logout();
-  document.getElementById('auth-view').style.display = 'block';
+  const authView = document.getElementById('view-auth');
+  if (authView) {
+    authView.classList.add('active');
+    authView.style.display = 'flex';
+  }
   document.getElementById('app-view').style.display = 'none';
   UI.showToast('Déconnecté', 'success');
 }
