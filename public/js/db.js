@@ -864,6 +864,7 @@ const DB = (() => {
     init,
     getSupabaseClient: () => supabase,
     getUseSupabase: () => useSupabase,
+    setUseSupabase: (val) => { useSupabase = val; },
     getClients,
     addClient,
     addClients,
