@@ -854,6 +854,12 @@ html[dir="rtl"] .toast.info { border-left: none; border-right: 4px solid var(--i
   to { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes slideOut {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
+}
+
+
 /* Modals */
 .modal {
   display: none;

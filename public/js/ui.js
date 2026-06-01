@@ -467,19 +467,15 @@ const UI = (() => {
     const text = TRANSLATIONS[currentLanguage][messageKeyOrText] || messageKeyOrText;
     
     const toast = document.createElement('div');
-    toast.className = `toast badge-${type === 'success' ? 'success' : type === 'error' ? 'crimson' : 'amber'}`;
-    toast.style.padding = '12px 20px';
-    toast.style.marginBottom = '8px';
-    toast.style.borderRadius = '8px';
-    toast.style.boxShadow = 'var(--shadow-md)';
-    toast.style.color = '#fff';
-    toast.style.fontWeight = '600';
-    toast.style.display = 'flex';
-    toast.style.alignItems = 'center';
-    toast.style.gap = '8px';
-    toast.style.animation = 'slideIn 0.3s ease forwards';
+    const toastClass = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+    toast.className = `toast ${toastClass}`;
+
+    let dotColor = 'var(--info)';
+    if (type === 'success') dotColor = 'var(--success)';
+    if (type === 'error') dotColor = 'var(--crimson)';
+
     toast.innerHTML = `
-      <span class="dot"></span>
+      <span class="dot" style="background-color: ${dotColor};"></span>
       <span>${text}</span>
     `;
 
