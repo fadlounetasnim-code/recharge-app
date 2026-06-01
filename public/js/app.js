@@ -213,6 +213,10 @@ function setupAuthenticatedState() {
     el.style.display = role === 'employee' ? 'none' : 'flex';
   });
 
+  document.querySelectorAll('[data-nav="settings"]').forEach(el => {
+    el.style.display = role === 'employee' ? 'none' : 'flex';
+  });
+
   const btnAdjustStock = document.getElementById('btn-adjust-stock-move');
   if (btnAdjustStock) {
     btnAdjustStock.style.display = role === 'employee' ? 'none' : 'flex';
@@ -238,6 +242,18 @@ function setupAuthenticatedState() {
   const goalInput = document.getElementById('setting-daily-goal');
   if (goalInput) {
     goalInput.value = storedGoal;
+  }
+
+  const storedRechargesGoal = localStorage.getItem('rs_monthly_recharges_goal') || '1000';
+  const rechargesGoalInput = document.getElementById('setting-monthly-recharges-goal');
+  if (rechargesGoalInput) {
+    rechargesGoalInput.value = storedRechargesGoal;
+  }
+
+  const storedSimsGoal = localStorage.getItem('rs_monthly_sims_goal') || '100';
+  const simsGoalInput = document.getElementById('setting-monthly-sims-goal');
+  if (simsGoalInput) {
+    simsGoalInput.value = storedSimsGoal;
   }
 
   // Show/Hide settings cards based on role (hide sensitive panels for employees/vendeurs)
@@ -1700,16 +1716,25 @@ function clearLocalDatabase() {
 
 function saveLocalSettings() {
   const goalInput = document.getElementById('setting-daily-goal');
-  if (goalInput) {
+  const rechargesInput = document.getElementById('setting-monthly-recharges-goal');
+  const simsInput = document.getElementById('setting-monthly-sims-goal');
+
+  if (goalInput && rechargesInput && simsInput) {
     const goalVal = parseFloat(goalInput.value);
-    if (!isNaN(goalVal) && goalVal >= 0) {
-      localStorage.setItem('rs_daily_goal', goalVal.toFixed(2));
-      UI.showToast('Objectif sauvegardé avec succès !', 'success');
-      // Refresh dashboard if active to apply new goal
-      UI.initDashboard();
-    } else {
-      UI.showToast('Veuillez entrer un objectif valide.', 'error');
+    const rechargesVal = parseInt(rechargesInput.value, 10);
+    const simsVal = parseInt(simsInput.value, 10);
+
+    if (isNaN(goalVal) || goalVal < 0 || isNaN(rechargesVal) || rechargesVal < 0 || isNaN(simsVal) || simsVal < 0) {
+      UI.showToast('Veuillez entrer des objectifs valides.', 'error');
+      return;
     }
+
+    localStorage.setItem('rs_daily_goal', goalVal.toFixed(2));
+    localStorage.setItem('rs_monthly_recharges_goal', rechargesVal.toString());
+    localStorage.setItem('rs_monthly_sims_goal', simsVal.toString());
+
+    UI.showToast('Objectifs sauvegardés avec succès !', 'success');
+    UI.initDashboard();
   }
 }
 

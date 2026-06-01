@@ -159,6 +159,17 @@ const UI = (() => {
       settings_demo_mode: "Mode Offline / Démo local",
       settings_demo_desc: "Si aucun identifiant Supabase n'est fourni, l'application utilise le stockage local du navigateur (LocalStorage).",
       btn_clear_db: "Effacer la base de données locale",
+      lbl_daily_goal: "Objectif Journalier",
+      lbl_monthly_recharges_goal: "Objectif Mensuel Recharges",
+      lbl_monthly_sims_goal: "Objectif Mensuel SIM",
+      lbl_progress_month_recharges: "Progrès du mois (Recharges)",
+      lbl_progress_month_sims: "Progrès du mois (SIMs)",
+      lbl_progress_daily_net: "Progrès du jour (Net)",
+      lbl_sales_goals_title: "Objectifs de Vente",
+      lbl_setting_daily_goal: "Objectif Journalier (DH)",
+      lbl_setting_monthly_recharges_goal: "Objectif Mensuel Recharges (Unités)",
+      lbl_setting_monthly_sims_goal: "Objectif Mensuel SIM (Unités)",
+      btn_save_goals: "Enregistrer les objectifs",
 
       // Modals General
       btn_cancel: "Annuler",
@@ -339,6 +350,17 @@ const UI = (() => {
       settings_demo_mode: "وضع العمل المحلي دون إنترنت",
       settings_demo_desc: "إذا لم يتم إدخال بيانات Supabase، سيقوم النظام بالعمل محلياً وحفظ البيانات في متصفحك.",
       btn_clear_db: "مسح جميع البيانات المحلية",
+      lbl_daily_goal: "الهدف اليومي",
+      lbl_monthly_recharges_goal: "الهدف الشهري للتعبئات",
+      lbl_monthly_sims_goal: "الهدف الشهري لبطاقات SIM",
+      lbl_progress_month_recharges: "التقدم الشهري (التعبئات)",
+      lbl_progress_month_sims: "التقدم الشهري (البطاقات)",
+      lbl_progress_daily_net: "تقدم اليوم (الصافي)",
+      lbl_sales_goals_title: "أهداف المبيعات",
+      lbl_setting_daily_goal: "الهدف اليومي (درهم)",
+      lbl_setting_monthly_recharges_goal: "الهدف الشهري للتعبئات (قطع)",
+      lbl_setting_monthly_sims_goal: "الهدف الشهري لبطاقات SIM (قطع)",
+      btn_save_goals: "حفظ الأهداف",
       modal_stock_invoice_title: "شحنة مخزون جديدة (فاتورة)",
       modal_edit_stock_invoice_title: "تعديل فاتورة التوريد",
       modal_invoice_details_title: "تفاصيل الفاتورة",
@@ -596,7 +618,32 @@ const UI = (() => {
           const todayStr = getLocalDateStr(new Date());
           const todaySales = filteredSales.filter(s => getLocalDateStr(s.created_at) === todayStr);
           const todayNet = todaySales.reduce((sum, s) => sum + (Number(s.net_total) || 0), 0);
+
+          // Compute monthly stats for goals
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          const currentMonth = now.getMonth();
           
+          const currentMonthSales = filteredSales.filter(s => {
+            const d = new Date(s.created_at);
+            return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+          });
+
+          let monthlyRechargesVolume = 0;
+          let monthlySimsVolume = 0;
+
+          currentMonthSales.forEach(sale => {
+            const art = articles.find(a => a.id === sale.article_id);
+            if (art) {
+              if (art.category === 'recharge') {
+                monthlyRechargesVolume += sale.quantity;
+              } else if (art.category === 'sim' || art.category === 'pack_sim') {
+                monthlySimsVolume += sale.quantity;
+              }
+            }
+          });
+          
+          // 1. Daily Sales Goal
           const target = parseFloat(localStorage.getItem('rs_daily_goal')) || 500.00;
           const pct = Math.min(100, (todayNet / target) * 100);
           document.getElementById('seller-goal-text').textContent = `${todayNet.toFixed(2)} / ${target.toFixed(2)} DH`;
@@ -604,6 +651,24 @@ const UI = (() => {
           document.getElementById('seller-goal-status').textContent = pct >= 100 
             ? (isArabic ? 'تهانينا! لقد حققت هدفك اليومي 🎉' : 'Félicitations ! Objectif quotidien atteint 🎉')
             : (isArabic ? `متبقي ${(target - todayNet).toFixed(2)} درهم لتحقيق الهدف` : `Encore ${(target - todayNet).toFixed(2)} DH pour atteindre l'objectif`);
+
+          // 2. Monthly Recharges Goal
+          const rechargesTarget = parseInt(localStorage.getItem('rs_monthly_recharges_goal'), 10) || 1000;
+          const pctRecharges = Math.min(100, (monthlyRechargesVolume / rechargesTarget) * 100);
+          document.getElementById('seller-monthly-recharges-text').textContent = `${monthlyRechargesVolume} / ${rechargesTarget} Pcs`;
+          document.getElementById('seller-monthly-recharges-bar').style.width = `${pctRecharges}%`;
+          document.getElementById('seller-monthly-recharges-status').textContent = pctRecharges >= 100
+            ? (isArabic ? 'تهانينا! حققت هدف التعبئات الشهري 🎉' : 'Félicitations ! Objectif de recharges mensuel atteint 🎉')
+            : (isArabic ? `متبقي ${rechargesTarget - monthlyRechargesVolume} قطعة لتحقيق الهدف` : `Encore ${rechargesTarget - monthlyRechargesVolume} Pcs pour atteindre l'objectif`);
+
+          // 3. Monthly SIMs Goal
+          const simsTarget = parseInt(localStorage.getItem('rs_monthly_sims_goal'), 10) || 100;
+          const pctSims = Math.min(100, (monthlySimsVolume / simsTarget) * 100);
+          document.getElementById('seller-monthly-sims-text').textContent = `${monthlySimsVolume} / ${simsTarget} Pcs`;
+          document.getElementById('seller-monthly-sims-bar').style.width = `${pctSims}%`;
+          document.getElementById('seller-monthly-sims-status').textContent = pctSims >= 100
+            ? (isArabic ? 'تهانينا! حققت هدف البطاقات الشهري 🎉' : 'Félicitations ! Objectif de SIM mensuel atteint 🎉')
+            : (isArabic ? `متبقي ${simsTarget - monthlySimsVolume} بطاقة لتحقيق الهدف` : `Encore ${simsTarget - monthlySimsVolume} Pcs pour atteindre l'objectif`);
         }
       } else {
         if (firstCardTitle) firstCardTitle.textContent = getTranslation('kpi_gross_sales');
