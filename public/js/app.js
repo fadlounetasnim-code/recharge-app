@@ -684,14 +684,14 @@ function openQRScanner() {
   document.getElementById('modal-overlay').style.display = 'block';
   document.getElementById('qr-scanner-modal').style.display = 'block';
   
-  html5QrcodeScanner = new Html5Qrcode("qr-reader");
-  html5QrcodeScanner.start(
-    { facingMode: "environment" },
-    {
-      fps: 10,
-      qrbox: { width: 250, height: 250 }
-    },
-    async (decodedText) => {
+  try {
+    if (typeof Html5Qrcode === 'undefined') {
+      throw new Error("La bibliothèque de scan QR n'est pas disponible.");
+    }
+    
+    html5QrcodeScanner = new Html5Qrcode("qr-reader");
+    
+    const onScanSuccess = async (decodedText) => {
       closeQRScanner();
       
       const clients = await DB.getClients();
@@ -703,21 +703,57 @@ function openQRScanner() {
       } else {
         UI.showToast("Client non trouvé", "error");
       }
-    },
-    (errorMessage) => {}
-  ).catch(err => {
-    console.error(err);
-    UI.showToast("Erreur camera: " + err.message, "error");
-  });
+    };
+    
+    const onScanFailure = (errorMessage) => {
+      // Ignored to avoid spamming console
+    };
+
+    html5QrcodeScanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      },
+      onScanSuccess,
+      onScanFailure
+    ).catch(err => {
+      console.warn("Camera facingMode environment failed, trying fallback constraints:", err);
+      // Fallback: try starting with empty constraints (defaults to default system camera)
+      html5QrcodeScanner.start(
+        {},
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 }
+        },
+        onScanSuccess,
+        onScanFailure
+      ).catch(err2 => {
+        console.error("Camera fallback failed:", err2);
+        UI.showToast("Erreur camera: " + err2.message, "error");
+      });
+    });
+  } catch (err) {
+    console.error("QR Scanner Init Error:", err);
+    UI.showToast("Erreur scanner: " + err.message, "error");
+  }
 }
 
 function closeQRScanner() {
   document.getElementById('qr-scanner-modal').style.display = 'none';
   document.getElementById('modal-overlay').style.display = 'none';
   if (html5QrcodeScanner) {
-    html5QrcodeScanner.stop().then(() => {
+    try {
+      html5QrcodeScanner.stop().then(() => {
+        html5QrcodeScanner = null;
+      }).catch(err => {
+        console.error("Error stopping scanner:", err);
+        html5QrcodeScanner = null;
+      });
+    } catch (err) {
+      console.error("Error calling stop on scanner:", err);
       html5QrcodeScanner = null;
-    }).catch(err => console.error(err));
+    }
   }
 }
 
