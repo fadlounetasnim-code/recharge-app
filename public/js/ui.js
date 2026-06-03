@@ -11,6 +11,10 @@ const UI = (() => {
     return `${year}-${month}-${day}`;
   };
 
+  let dashboardStartDate = getLocalDateStr(new Date());
+  let dashboardEndDate = getLocalDateStr(new Date());
+
+
   const parseClientPayments = (notes) => {
     const match = notes ? notes.match(/\[PMTS:([\s\S]*?)\]/) : null;
     if (match) {
@@ -60,10 +64,9 @@ const UI = (() => {
       // Dashboard KPI Cards
       dashboard_subtitle: "Aperçu de l'activité commerciale en temps réel",
       btn_new_sale: "Nouvelle Vente",
-      kpi_gross_sales: "Ventes Brutes",
-      kpi_net_sales: "Chiffre d'Affaires Net",
-      kpi_recharges: "Volume Recharges",
-      kpi_sims: "Cartes SIM & Packs",
+      kpi_recharges_val: "Recharges (Valeur)",
+      kpi_sims_val: "Ventes SIM (Valeur)",
+      kpi_sims_qty: "Volume SIM (Pcs)",
       chart_sales_title: "Évolution journalière des ventes (Net & Remises)",
       recent_sales_title: "Dernières ventes enregistrées",
       btn_view_all: "Voir tout",
@@ -214,7 +217,8 @@ const UI = (() => {
       msg_login_failed: "Connexion échouée. Identifiants invalides.",
       msg_access_denied: "Accès refusé !",
       msg_confirm_delete: "Êtes-vous sûr de vouloir supprimer cet élément ?",
-      msg_confirm_clear_db: "Voulez-vous vraiment effacer TOUTES les données locales ?"
+      msg_confirm_clear_db: "Voulez-vous vraiment effacer TOUTES les données locales ?",
+      msg_confirm_pay_credit: "Êtes-vous sûr de vouloir marquer cette vente comme entièrement payée ?"
     },
     ar: {
       app_title: "مدير الشحن والبطاقات",
@@ -251,10 +255,9 @@ const UI = (() => {
       // Dashboard KPI Cards
       dashboard_subtitle: "متابعة شاملة للمبيعات والمخزون في الوقت الفعلي",
       btn_new_sale: "عملية بيع جديدة",
-      kpi_gross_sales: "إجمالي المبيعات",
-      kpi_net_sales: "صافي المبيعات",
-      kpi_recharges: "حجم التعبئات",
-      kpi_sims: "بطاقات SIM والعروض",
+      kpi_recharges_val: "مبيعات التعبئة (قيمة)",
+      kpi_sims_val: "مبيعات SIM (قيمة)",
+      kpi_sims_qty: "مبيعات SIM (حجم)",
       chart_sales_title: "تطور المبيعات اليومية (الصافي والخصم)",
       recent_sales_title: "آخر المبيعات المسجلة",
       btn_view_all: "عرض الكل",
@@ -379,7 +382,8 @@ const UI = (() => {
       th_receipt: "الوصل",
       modal_new_client_title: "زبون جديد",
       modal_import_preview_title: "معاينة الاستيراد",
-      btn_confirm_import: "تأكيد الاستيراد"
+      btn_confirm_import: "تأكيد الاستيراد",
+      msg_confirm_pay_credit: "هل أنت متأكد من رغبتك في تحديد هذه البيعة كمدفوعة بالكامل؟"
     }
   };
 
@@ -544,33 +548,38 @@ const UI = (() => {
       const selectedSeller = filterSelect ? filterSelect.value : 'all';
 
       // Calculate totals
-      let grossTotal = 0;
-      let netTotal = 0;
-      let rechargesVolume = 0;
-      let simVolume = 0;
+      let rechargesVal = 0;
+      let simsVal = 0;
+      let simsQty = 0;
       
-      // Filter sales by permission and selected seller
+      // Filter sales by permission, selected seller AND date range
       const filteredSales = sales.filter(s => {
+        let matchesSeller = false;
         if (userRole === 'admin' || userRole === 'supervisor') {
           if (selectedSeller !== 'all') {
-            return s.employee_id === selectedSeller;
+            matchesSeller = s.employee_id === selectedSeller;
+          } else {
+            matchesSeller = true;
           }
-          return true;
+        } else {
+          matchesSeller = s.employee_id === user.id;
         }
-        return s.employee_id === user.id;
+
+        if (!matchesSeller) return false;
+
+        const saleDate = getLocalDateStr(s.created_at);
+        return saleDate >= dashboardStartDate && saleDate <= dashboardEndDate;
       });
 
       filteredSales.forEach(sale => {
-        grossTotal += Number(sale.gross_total) || 0;
-        netTotal += Number(sale.net_total) || 0;
-        
         // Find article category
         const art = articles.find(a => a.id === sale.article_id);
         if (art) {
           if (art.category === 'recharge') {
-            rechargesVolume += sale.quantity;
+            rechargesVal += Number(sale.net_total) || 0;
           } else if (art.category === 'sim' || art.category === 'pack_sim') {
-            simVolume += sale.quantity;
+            simsVal += Number(sale.net_total) || 0;
+            simsQty += Number(sale.quantity) || 0;
           }
         }
       });
@@ -579,14 +588,21 @@ const UI = (() => {
       const firstCardTitle = document.querySelector('.metrics-grid .metric-card:nth-child(1) h3');
       const secondCardTitle = document.querySelector('.metrics-grid .metric-card:nth-child(2) h3');
       const thirdCardTitle = document.querySelector('.metrics-grid .metric-card:nth-child(3) h3');
-      const fourthCardTitle = document.querySelector('.metrics-grid .metric-card:nth-child(4) h3');
       const isArabic = currentLanguage === 'ar';
 
+      // Update KPI card contents
+      const kpiRechargesVal = document.getElementById('kpi-recharges-val');
+      const kpiSimsVal = document.getElementById('kpi-sims-val');
+      const kpiSimsQty = document.getElementById('kpi-sims-qty');
+
+      if (kpiRechargesVal) kpiRechargesVal.textContent = `${rechargesVal.toFixed(2)} DH`;
+      if (kpiSimsVal) kpiSimsVal.textContent = `${simsVal.toFixed(2)} DH`;
+      if (kpiSimsQty) kpiSimsQty.textContent = `${simsQty} Pcs`;
+
       if (userRole === 'employee') {
-        if (firstCardTitle) firstCardTitle.textContent = isArabic ? 'مبيعاتي الإجمالية' : 'Mes Ventes Brutes';
-        if (secondCardTitle) secondCardTitle.textContent = isArabic ? 'مبيعاتي الصافية' : 'Mon Chiffre Net';
-        if (thirdCardTitle) thirdCardTitle.textContent = isArabic ? 'حجم التعبئات' : 'Volume Recharges';
-        if (fourthCardTitle) fourthCardTitle.textContent = isArabic ? 'مخزوني الإجمالي' : 'Mon Stock (Total)';
+        if (firstCardTitle) firstCardTitle.textContent = isArabic ? 'مبيعاتي من التعبئة (قيمة)' : 'Mes Recharges (Valeur)';
+        if (secondCardTitle) secondCardTitle.textContent = isArabic ? 'مبيعاتي من SIM (قيمة)' : 'Mes SIM (Valeur)';
+        if (thirdCardTitle) thirdCardTitle.textContent = isArabic ? 'مبيعاتي من SIM (حجم)' : 'Mes SIM (Volume)';
         
         let sellerTotalStock = 0;
         const quickStockBody = document.getElementById('seller-quick-stock-body');
@@ -605,23 +621,19 @@ const UI = (() => {
             quickStockBody.appendChild(tr);
           }
         }
-        
-        document.getElementById('kpi-gross-sales').textContent = `${grossTotal.toFixed(2)} DH`;
-        document.getElementById('kpi-net-sales').textContent = `${netTotal.toFixed(2)} DH`;
-        document.getElementById('kpi-recharges').textContent = `${rechargesVolume} Pcs`;
-        document.getElementById('kpi-sims').textContent = `${sellerTotalStock} Pcs`;
 
         const widgets = document.getElementById('employee-dashboard-widgets');
         if (widgets) {
           widgets.style.display = 'grid';
           
-          // Compute monthly stats for goals
+          // Compute monthly stats for goals (using raw sales to ensure full-month calculation)
           const now = new Date();
           const currentYear = now.getFullYear();
           const currentMonth = now.getMonth();
           
-          const currentMonthSales = filteredSales.filter(s => {
+          const currentMonthSales = sales.filter(s => {
             const d = new Date(s.created_at);
+            if (s.employee_id !== user.id) return false;
             return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
           });
 
@@ -664,15 +676,9 @@ const UI = (() => {
             : (isArabic ? `متبقي ${simsTarget - monthlySimsVolume} بطاقة لتحقيق الهدف` : `Encore ${simsTarget - monthlySimsVolume} Pcs pour atteindre l'objectif`);
         }
       } else {
-        if (firstCardTitle) firstCardTitle.textContent = getTranslation('kpi_gross_sales');
-        if (secondCardTitle) secondCardTitle.textContent = getTranslation('kpi_net_sales');
-        if (thirdCardTitle) thirdCardTitle.textContent = getTranslation('kpi_recharges');
-        if (fourthCardTitle) fourthCardTitle.textContent = getTranslation('kpi_sims');
-        
-        document.getElementById('kpi-gross-sales').textContent = `${grossTotal.toFixed(2)} DH`;
-        document.getElementById('kpi-net-sales').textContent = `${netTotal.toFixed(2)} DH`;
-        document.getElementById('kpi-recharges').textContent = `${rechargesVolume} Pcs`;
-        document.getElementById('kpi-sims').textContent = `${simVolume} Pcs`;
+        if (firstCardTitle) firstCardTitle.textContent = getTranslation('kpi_recharges_val');
+        if (secondCardTitle) secondCardTitle.textContent = getTranslation('kpi_sims_val');
+        if (thirdCardTitle) thirdCardTitle.textContent = getTranslation('kpi_sims_qty');
 
         const widgets = document.getElementById('employee-dashboard-widgets');
         if (widgets) widgets.style.display = 'none';
@@ -1156,33 +1162,127 @@ const UI = (() => {
       return;
     }
 
+    // Group sales by client
+    const groups = {};
     filteredSales.forEach(sale => {
-      const discountStr = sale.discount_type === 'percentage' 
-        ? `${sale.discount_value}% (${sale.discount_amount} DH)` 
-        : sale.discount_type === 'fixed' 
-          ? `${sale.discount_value} DH` 
-          : '-';
+      const clientId = sale.client_id || 'unknown';
+      if (!groups[clientId]) {
+        groups[clientId] = {
+          clientName: sale.clients?.full_name || 'Client inconnu',
+          clientPhone: sale.clients?.phone_number || '-',
+          sales: [],
+          totalNet: 0,
+          totalQty: 0,
+          paymentStatus: 'paid'
+        };
+      }
+      groups[clientId].sales.push(sale);
+      groups[clientId].totalNet += Number(sale.net_total) || 0;
+      groups[clientId].totalQty += Number(sale.quantity) || 0;
+      if (sale.payment_status !== 'paid') {
+        groups[clientId].paymentStatus = sale.payment_status;
+      }
+    });
 
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${new Date(sale.created_at).toLocaleString()}</td>
-        <td><strong>${sale.clients?.full_name || 'Client'}</strong></td>
-        <td>${sale.articles?.name || 'Recharge'}</td>
-        <td>${sale.quantity}</td>
-        <td>${Number(sale.unit_price).toFixed(2)} DH</td>
-        <td>${Number(sale.gross_total).toFixed(2)} DH</td>
-        <td class="text-amber">${discountStr}</td>
-        <td class="text-success" style="font-weight:700;">${Number(sale.net_total).toFixed(2)} DH</td>
-        <td><span class="badge ${sale.payment_status === 'paid' ? 'badge-success' : sale.payment_status === 'unpaid' ? 'badge-crimson' : 'badge-amber'}">${getTranslation('opt_' + sale.payment_status)}</span></td>
-        <td><span style="font-size:0.8rem;">${sale.team_members?.full_name || 'Vendeur'}</span></td>
+    const sortedGroups = Object.keys(groups).map(clientId => {
+      const group = groups[clientId];
+      const maxDate = Math.max(...group.sales.map(s => new Date(s.created_at).getTime()));
+      return {
+        clientId,
+        ...group,
+        maxDate
+      };
+    }).sort((a, b) => b.maxDate - a.maxDate);
+
+    const isArabic = currentLanguage === 'ar';
+
+    sortedGroups.forEach(group => {
+      // 1. Group Header Row
+      const headerTr = document.createElement('tr');
+      headerTr.className = 'group-header';
+      headerTr.setAttribute('data-client-id', group.clientId);
+      headerTr.setAttribute('data-client-name', group.clientName);
+      headerTr.setAttribute('data-client-phone', group.clientPhone);
+      headerTr.setAttribute('onclick', `toggleClientGroup('${group.clientId}')`);
+      
+      const salesCountText = isArabic 
+        ? `[${group.sales.length} مبيعات]` 
+        : `[${group.sales.length} vente${group.sales.length > 1 ? 's' : ''}]`;
+
+      const latestDateStr = new Date(group.maxDate).toLocaleDateString();
+
+      const categories = Array.from(new Set(group.sales.map(s => s.articles?.category || 'recharge')));
+      const categorySummary = categories.map(cat => getTranslation('opt_' + cat)).join(', ');
+
+      headerTr.innerHTML = `
+        <td>${latestDateStr}</td>
+        <td><strong>${group.clientName}</strong> <span style="font-size:0.75rem; color:var(--text-muted); margin-left:8px;">${salesCountText}</span></td>
+        <td style="color:var(--text-muted); font-size:0.8rem;">${categorySummary}</td>
+        <td style="font-weight:700;">${group.totalQty} Pcs</td>
+        <td>-</td>
+        <td>-</td>
+        <td>-</td>
+        <td class="text-success" style="font-weight:700;">${group.totalNet.toFixed(2)} DH</td>
+        <td><span class="badge ${group.paymentStatus === 'paid' ? 'badge-success' : group.paymentStatus === 'unpaid' ? 'badge-crimson' : 'badge-amber'}">${getTranslation('opt_' + group.paymentStatus)}</span></td>
+        <td>-</td>
         <td class="text-right">
-          <button class="btn btn-outline btn-sm" onclick="showReceipt('${sale.id}')" title="Ticket">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          <button class="btn btn-outline btn-sm toggle-group-btn" style="padding:4px 8px;">
+            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px; transition: transform 0.2s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
         </td>
       `;
-      tbody.appendChild(tr);
+      tbody.appendChild(headerTr);
+
+      // 2. Group Child Rows
+      group.sales.forEach(sale => {
+        const discountStr = sale.discount_type === 'percentage' 
+          ? `${sale.discount_value}% (${sale.discount_amount} DH)` 
+          : sale.discount_type === 'fixed' 
+            ? `${sale.discount_value} DH` 
+            : '-';
+
+        const tr = document.createElement('tr');
+        tr.className = 'group-child';
+        tr.setAttribute('data-client-id', group.clientId);
+        tr.setAttribute('data-client-name', group.clientName);
+        tr.setAttribute('data-client-phone', group.clientPhone);
+        tr.setAttribute('data-notes', sale.notes || '');
+        tr.setAttribute('data-category', sale.articles?.category || '');
+        
+        tr.innerHTML = `
+          <td>${new Date(sale.created_at).toLocaleString()}</td>
+          <td style="color:var(--text-muted);">${group.clientName}</td>
+          <td>${sale.articles?.name || 'Recharge'}</td>
+          <td>${sale.quantity}</td>
+          <td>${Number(sale.unit_price).toFixed(2)} DH</td>
+          <td>${Number(sale.gross_total).toFixed(2)} DH</td>
+          <td class="text-amber">${discountStr}</td>
+          <td class="text-success" style="font-weight:700;">${Number(sale.net_total).toFixed(2)} DH</td>
+          <td><span class="badge ${sale.payment_status === 'paid' ? 'badge-success' : sale.payment_status === 'unpaid' ? 'badge-crimson' : 'badge-amber'}">${getTranslation('opt_' + sale.payment_status)}</span></td>
+          <td><span style="font-size:0.8rem;">${sale.team_members?.full_name || 'Vendeur'}</span></td>
+          <td class="text-right">
+            <div style="display:flex; justify-content:flex-end; gap:6px;">
+              ${sale.payment_status !== 'paid' ? `
+                <button class="btn btn-outline btn-sm text-success" onclick="event.stopPropagation(); markSaleAsPaidDirectly('${sale.id}')" title="${isArabic ? 'تأكيد السداد بالكامل' : 'Marquer comme payé directement'}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+                <button class="btn btn-outline btn-sm text-amber" onclick="event.stopPropagation(); openCreditPaymentModal('${sale.id}')" title="${isArabic ? 'تسجيل دفعة' : 'Enregistrer un règlement'}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                </button>
+              ` : ''}
+              <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); showReceipt('${sale.id}')" title="Ticket">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              </button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
     });
+
+    if (window.filterSalesTable) {
+      filterSalesTable();
+    }
   };
 
   const refreshStock = async () => {
@@ -1213,6 +1313,11 @@ const UI = (() => {
       card.style.justifyContent = 'space-between';
       card.style.borderLeft = `4px solid ${art.stock_quantity < 20 ? 'var(--crimson)' : 'var(--success)'}`;
 
+      const isArabic = currentLanguage === 'ar';
+      const priceText = (art.category === 'sim' || art.category === 'pack_sim')
+        ? (isArabic ? 'سعر يدوي' : 'Prix Manuel')
+        : `${art.selling_price} DH`;
+
       card.innerHTML = `
         <div>
           <span class="role-tag ${art.category === 'recharge' ? 'employee' : 'admin'}" style="font-size:0.65rem;">${getTranslation('opt_' + art.category)}</span>
@@ -1224,7 +1329,7 @@ const UI = (() => {
             <div style="font-size:1.4rem; font-weight:700; color:${art.stock_quantity < 20 ? 'var(--crimson)' : 'var(--text-primary)'}">${art.stock_quantity} Pcs</div>
           </div>
           <div style="text-align:right;">
-            <div style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">${art.selling_price} DH</div>
+            <div style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">${priceText}</div>
             <div style="font-size:0.65rem; color:var(--text-muted);">Achat: ${art.buying_price} DH</div>
           </div>
         </div>
@@ -1276,7 +1381,8 @@ const UI = (() => {
         invoicesGrouped[invNum].items.push({
           article_id: m.article_id,
           article_name: m.articles?.name || 'Article',
-          quantity: m.quantity
+          quantity: m.quantity,
+          notes: m.notes || ''
         });
       });
 
@@ -1290,7 +1396,8 @@ const UI = (() => {
           inv.items.forEach(item => {
             const art = articles.find(a => a.id === item.article_id);
             if (art) {
-              const basePrice = art.category === 'recharge' ? (Number(art.face_value) || 0) : (Number(art.buying_price) || 0);
+              const match = item.notes ? item.notes.match(/\[PRICE:([\d.]+)\]/) : null;
+              const basePrice = match ? (Number(match[1]) || 0) : (art.category === 'recharge' ? (Number(art.face_value) || 0) : (Number(art.buying_price) || 0));
               costBrut += item.quantity * basePrice;
             }
           });
@@ -1573,6 +1680,8 @@ const UI = (() => {
     refreshCredits,
     updateReportFilters,
     changeCalendarMonth,
-    getActiveLanguage: () => currentLanguage
+    getActiveLanguage: () => currentLanguage,
+    setDateRange: (start, end) => { dashboardStartDate = start; dashboardEndDate = end; },
+    getDateRange: () => ({ start: dashboardStartDate, end: dashboardEndDate })
   };
 })();

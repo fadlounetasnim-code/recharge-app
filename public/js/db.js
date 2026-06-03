@@ -45,8 +45,8 @@ const DB = (() => {
         { id: 'art-6', name: 'Recharge 500 DH', category: 'recharge', face_value: 500, buying_price: 470.00, selling_price: 500, stock_quantity: 0, is_active: true },
         { id: 'art-7', name: 'Recharge 1000 DH', category: 'recharge', face_value: 1000, buying_price: 940.00, selling_price: 1000, stock_quantity: 0, is_active: true },
         { id: 'art-8', name: 'Recharge 5000 DH', category: 'recharge', face_value: 5000, buying_price: 4700.00, selling_price: 5000, stock_quantity: 0, is_active: true },
-        { id: 'art-9', name: 'Carte SIM', category: 'sim', face_value: 0, buying_price: 10.00, selling_price: 20, stock_quantity: 0, is_active: true },
-        { id: 'art-10', name: 'Pack SIM', category: 'pack_sim', face_value: 0, buying_price: 80.00, selling_price: 120, stock_quantity: 0, is_active: true }
+        { id: 'art-9', name: 'Carte SIM', category: 'sim', face_value: 0, buying_price: 10.00, selling_price: 2.5, stock_quantity: 910, is_active: true },
+        { id: 'art-10', name: 'Pack SIM', category: 'pack_sim', face_value: 0, buying_price: 80.00, selling_price: 2.5, stock_quantity: 0, is_active: true }
       ];
       setLocalData('articles', defaultArticles);
     }
@@ -61,6 +61,44 @@ const DB = (() => {
     }
   };
   seedLocalData();
+
+  // One-time migration to set Carte SIM stock to 910
+  const migrateSIMStock = async () => {
+    // Local migration
+    if (!localStorage.getItem('sim_stock_corrected_to_910')) {
+      const articles = getLocalData('articles');
+      if (articles && articles.length > 0) {
+        const simArticle = articles.find(a => a.id === 'art-9');
+        if (simArticle) {
+          simArticle.stock_quantity = 910;
+          setLocalData('articles', articles);
+          localStorage.setItem('sim_stock_corrected_to_910', 'true');
+          console.log('DB: Migrated local Carte SIM stock to 910 Pcs.');
+        }
+      }
+    }
+
+    // Supabase migration
+    if (useSupabase && !localStorage.getItem('supabase_sim_stock_corrected_to_910')) {
+      try {
+        const { data, error } = await supabase
+          .from('articles')
+          .update({ stock_quantity: 910 })
+          .eq('name', 'Carte SIM')
+          .select();
+        
+        if (!error && data && data.length > 0) {
+          localStorage.setItem('supabase_sim_stock_corrected_to_910', 'true');
+          console.log('DB: Migrated Supabase Carte SIM stock to 910 Pcs.');
+        } else if (error) {
+          console.error('DB: Supabase stock migration error:', error);
+        }
+      } catch (err) {
+        console.error('DB: Exception during Supabase stock migration:', err);
+      }
+    }
+  };
+  migrateSIMStock();
 
   // --- Clients CRUD ---
   const getClients = async () => {
@@ -224,7 +262,7 @@ const DB = (() => {
         .from('sales')
         .select(`
           *,
-          clients (full_name, dealer_number),
+          clients (full_name, dealer_number, phone_number),
           team_members (full_name),
           articles (name, category)
         `)
@@ -239,7 +277,7 @@ const DB = (() => {
     const articles = getLocalData('articles');
     return sales.map(s => ({
       ...s,
-      clients: clients.find(c => c.id === s.client_id) || { full_name: s.client_name || 'Client inconnu', dealer_number: '-' },
+      clients: clients.find(c => c.id === s.client_id) || { full_name: s.client_name || 'Client inconnu', dealer_number: '-', phone_number: '-' },
       team_members: team.find(t => t.id === s.employee_id) || { full_name: s.employee_name || 'Employé' },
       articles: articles.find(a => a.id === s.article_id) || { name: s.article_name || 'Article' }
     })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -492,7 +530,7 @@ const DB = (() => {
         employee_id: employeeId,
         invoice_number: invoiceNumber,
         discount_percentage: discountPercentage,
-        notes: notes
+        notes: it.price !== null ? `[PRICE:${it.price}] ${notes}` : notes
       }));
       const { data, error } = await supabase.from('stock_movements').insert(movements).select();
       if (!error) return data;
@@ -511,7 +549,7 @@ const DB = (() => {
         employee_id: employeeId,
         invoice_number: invoiceNumber,
         discount_percentage: discountPercentage,
-        notes: notes,
+        notes: it.price !== null ? `[PRICE:${it.price}] ${notes}` : notes,
         created_at: new Date().toISOString()
       };
       movements.push(newMov);

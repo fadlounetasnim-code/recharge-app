@@ -140,6 +140,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Initialize Date Range Picker default inputs and text label
+  const todayStr = getLocalDateStr(new Date());
+  const startDateInput = document.getElementById('dashboard-start-date');
+  const endDateInput = document.getElementById('dashboard-end-date');
+  const dateRangeBtn = document.getElementById('dashboard-date-range-btn');
+  const dateRangeDropdown = document.getElementById('dashboard-date-range-dropdown');
+  const dateRangeLabel = document.getElementById('dashboard-date-range-label');
+  const btnCancelRange = document.getElementById('btn-cancel-date-range');
+  const btnApplyRange = document.getElementById('btn-apply-date-range');
+
+  const formatDateDMY = (dateStr) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  if (startDateInput && endDateInput && dateRangeLabel) {
+    startDateInput.value = todayStr;
+    endDateInput.value = todayStr;
+    dateRangeLabel.textContent = `${formatDateDMY(todayStr)} ~ ${formatDateDMY(todayStr)}`;
+    UI.setDateRange(todayStr, todayStr);
+  }
+
+  if (dateRangeBtn && dateRangeDropdown) {
+    dateRangeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dateRangeDropdown.style.display = dateRangeDropdown.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+
+  if (btnCancelRange && dateRangeDropdown) {
+    btnCancelRange.addEventListener('click', () => {
+      dateRangeDropdown.style.display = 'none';
+    });
+  }
+
+  if (btnApplyRange && startDateInput && endDateInput && dateRangeDropdown && dateRangeLabel) {
+    btnApplyRange.addEventListener('click', () => {
+      const start = startDateInput.value;
+      const end = endDateInput.value;
+      if (!start || !end) {
+        UI.showToast('Veuillez sélectionner les deux dates.', 'error');
+        return;
+      }
+      if (start > end) {
+        UI.showToast('La date de début doit être antérieure ou égale à la date de fin.', 'error');
+        return;
+      }
+      UI.setDateRange(start, end);
+      dateRangeLabel.textContent = `${formatDateDMY(start)} ~ ${formatDateDMY(end)}`;
+      dateRangeDropdown.style.display = 'none';
+      UI.initDashboard();
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (dateRangeDropdown && dateRangeBtn && !dateRangeBtn.contains(e.target) && !dateRangeDropdown.contains(e.target)) {
+      dateRangeDropdown.style.display = 'none';
+    }
+  });
+
   const clientSelect = document.getElementById('sale-client-id');
   if (clientSelect) {
     clientSelect.addEventListener('change', updateSaleClientInfo);
@@ -343,6 +404,9 @@ async function openSalesModal(preselectedClientId = null) {
   const clientSelect = document.getElementById('sale-client-id');
   clientSelect.innerHTML = '<option value="">-- Sélectionner Client --</option>';
 
+  const searchInput = document.getElementById('sale-client-search');
+  if (searchInput) searchInput.value = '';
+
   const clients = await DB.getClients();
   window.saleFormArticles = await DB.getArticles();
 
@@ -352,6 +416,8 @@ async function openSalesModal(preselectedClientId = null) {
   if (role === 'employee' && user) {
     filteredClients = clients.filter(c => c.created_by === user.id);
   }
+
+  window.activeSaleClients = filteredClients;
 
   filteredClients.forEach(c => {
     const opt = document.createElement('option');
@@ -381,6 +447,37 @@ async function openSalesModal(preselectedClientId = null) {
   document.getElementById('modal-overlay').style.display = 'block';
   document.getElementById('sales-modal').style.display = 'block';
 }
+
+function filterSaleClientsDropdown() {
+  const query = document.getElementById('sale-client-search').value.toLowerCase().trim();
+  const select = document.getElementById('sale-client-id');
+  if (!select) return;
+
+  const currentSelection = select.value;
+  select.innerHTML = '<option value="">-- Sélectionner Client --</option>';
+
+  if (window.activeSaleClients) {
+    window.activeSaleClients.forEach(c => {
+      const name = c.full_name || '';
+      const phone = c.phone_number || c.phone || '';
+      const dealer = c.dealer_number || '';
+      const matchText = `${name} ${phone} ${dealer}`.toLowerCase();
+      if (matchText.includes(query)) {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${name} (${dealer})`;
+        select.appendChild(opt);
+      }
+    });
+  }
+
+  // Restore selection if it still exists
+  const optionExists = Array.from(select.options).some(opt => opt.value === currentSelection);
+  if (optionExists) {
+    select.value = currentSelection;
+  }
+}
+window.filterSaleClientsDropdown = filterSaleClientsDropdown;
 
 function addSaleItemRow() {
   const container = document.getElementById('sale-items-container');
@@ -500,7 +597,12 @@ function onSaleItemArticleChanged(selectEl) {
   const priceInput = row.querySelector('.sale-item-unit-price');
 
   if (!articleId) {
-    if (priceInput) priceInput.value = '';
+    if (priceInput) {
+      priceInput.value = '';
+      priceInput.readOnly = false;
+      priceInput.style.opacity = '1';
+      priceInput.style.pointerEvents = 'auto';
+    }
     calculateSaleTotals();
     return;
   }
@@ -508,7 +610,18 @@ function onSaleItemArticleChanged(selectEl) {
   if (window.saleFormArticles) {
     const art = window.saleFormArticles.find(a => a.id === articleId);
     if (art && priceInput) {
-      priceInput.value = art.selling_price;
+      if (art.category === 'sim' || art.category === 'pack_sim') {
+        priceInput.value = 2.5; // default to 2.5 DH for SIMs
+        priceInput.readOnly = false;
+        priceInput.style.opacity = '1';
+        priceInput.style.pointerEvents = 'auto';
+      } else {
+        priceInput.value = art.selling_price;
+        // Make recharge prices fixed
+        priceInput.readOnly = true;
+        priceInput.style.opacity = '0.7';
+        priceInput.style.pointerEvents = 'none';
+      }
       calculateSaleTotals();
     }
   }
@@ -1071,9 +1184,15 @@ async function openStockInvoiceModal() {
     container.style.flexDirection = 'column';
     container.style.gap = '4px';
 
+    const isSim = a.category === 'sim' || a.category === 'pack_sim';
+    const priceInputHtml = isSim
+      ? `<input type="number" name="article-price" data-article-id="${a.id}" class="btn-outline article-price-input" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); margin-top:4px;" min="0" step="0.01" value="2.5" placeholder="Prix d'achat (Défaut: 2.5)">`
+      : '';
+
     container.innerHTML = `
       <label class="label" style="font-size:0.8rem;">${a.name} (Stock: ${a.stock_quantity})</label>
       <input type="number" name="article-qty" data-article-id="${a.id}" class="btn-outline article-qty-input" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" value="0">
+      ${priceInputHtml}
     `;
     grid.appendChild(container);
   });
@@ -1125,9 +1244,12 @@ async function handleStockInvoiceSubmit(e) {
     const articleId = input.getAttribute('data-article-id');
     const quantity = Number(input.value) || 0;
     if (quantity > 0) {
+      const priceInput = document.querySelector(`#stock-invoice-grid .article-price-input[data-article-id="${articleId}"]`);
+      const customPrice = priceInput ? (Number(priceInput.value) || 0) : null;
       items.push({
         article_id: articleId,
-        quantity: quantity
+        quantity: quantity,
+        price: customPrice
       });
     }
   });
@@ -1367,7 +1489,8 @@ async function showInvoiceDetails(invoiceNumber) {
   invoiceMovements.forEach(m => {
     const art = articles.find(a => a.id === m.article_id);
     if (art) {
-      const basePrice = art.category === 'recharge' ? (Number(art.face_value) || 0) : (Number(art.buying_price) || 0);
+      const match = m.notes ? m.notes.match(/\[PRICE:([\d.]+)\]/) : null;
+      const basePrice = match ? (Number(match[1]) || 0) : (art.category === 'recharge' ? (Number(art.face_value) || 0) : (Number(art.buying_price) || 0));
       costBrut += m.quantity * basePrice;
     }
 
@@ -1432,7 +1555,8 @@ async function openSupplierPaymentModal(invoiceNumber) {
   invoiceMovements.forEach(m => {
     const art = articles.find(a => a.id === m.article_id);
     if (art) {
-      const basePrice = art.category === 'recharge' ? (Number(art.face_value) || 0) : (Number(art.buying_price) || 0);
+      const match = m.notes ? m.notes.match(/\[PRICE:([\d.]+)\]/) : null;
+      const basePrice = match ? (Number(match[1]) || 0) : (art.category === 'recharge' ? (Number(art.face_value) || 0) : (Number(art.buying_price) || 0));
       costBrut += m.quantity * basePrice;
     }
   });
@@ -1776,15 +1900,27 @@ function filterClientsTable() {
 }
 
 function filterSalesTable() {
-  const query = document.getElementById('sales-search').value.toLowerCase();
+  const query = document.getElementById('sales-search').value.toLowerCase().trim();
   const payFilter = document.getElementById('sales-filter-payment').value;
   const catFilter = document.getElementById('sales-filter-category').value;
   
-  const trs = document.getElementById('sales-table-body').querySelectorAll('tr');
+  const body = document.getElementById('sales-table-body');
+  if (!body) return;
+  
+  const headers = body.querySelectorAll('tr.group-header');
+  const children = body.querySelectorAll('tr.group-child');
 
-  trs.forEach(tr => {
+  // 1. Filter child rows first
+  children.forEach(tr => {
+    const clientName = (tr.getAttribute('data-client-name') || '').toLowerCase();
+    const clientPhone = (tr.getAttribute('data-client-phone') || '').toLowerCase();
+    const notes = (tr.getAttribute('data-notes') || '').toLowerCase();
     const text = tr.textContent.toLowerCase();
-    const matchesQuery = text.includes(query);
+    
+    const matchesQuery = !query || clientName.includes(query) || 
+                         clientPhone.includes(query) || 
+                         text.includes(query) || 
+                         notes.includes(query);
     
     // Check payment matching
     let matchesPayment = true;
@@ -1794,12 +1930,58 @@ function filterSalesTable() {
     }
 
     // Check category matching
-    // For simplicity, checking text query matching category keyword
     let matchesCategory = true;
+    if (catFilter !== 'all') {
+      const rowCategory = tr.getAttribute('data-category') || '';
+      matchesCategory = rowCategory === catFilter;
+    }
+
+    const matchesAll = matchesQuery && matchesPayment && matchesCategory;
+    tr.dataset.matches = matchesAll ? 'true' : 'false';
+    tr.style.display = 'none'; // hidden by default
+  });
+
+  // 2. Filter and display headers based on matching children
+  headers.forEach(header => {
+    const clientId = header.getAttribute('data-client-id');
+    const headerClientName = (header.getAttribute('data-client-name') || '').toLowerCase();
+    const headerClientPhone = (header.getAttribute('data-client-phone') || '').toLowerCase();
     
-    tr.style.display = (matchesQuery && matchesPayment && matchesCategory) ? '' : 'none';
+    const matchesHeaderQuery = !query || headerClientName.includes(query) || headerClientPhone.includes(query);
+    
+    const relatedChildren = Array.from(children).filter(c => c.getAttribute('data-client-id') === clientId);
+    const hasMatchingChildren = relatedChildren.some(c => c.dataset.matches === 'true');
+
+    const groupMatches = (matchesHeaderQuery || hasMatchingChildren) && (relatedChildren.length === 0 || hasMatchingChildren);
+
+    if (groupMatches) {
+      header.style.display = '';
+      const isExpanded = header.classList.contains('expanded');
+      relatedChildren.forEach(c => {
+        if (c.dataset.matches === 'true' && isExpanded) {
+          c.style.display = '';
+        } else {
+          c.style.display = 'none';
+        }
+      });
+    } else {
+      header.style.display = 'none';
+      relatedChildren.forEach(c => {
+        c.style.display = 'none';
+      });
+    }
   });
 }
+
+function toggleClientGroup(clientId) {
+  const header = document.querySelector(`.group-header[data-client-id="${clientId}"]`);
+  if (!header) return;
+  
+  header.classList.toggle('expanded');
+  filterSalesTable();
+}
+
+window.toggleClientGroup = toggleClientGroup;
 
 async function openObjectivesModal() {
   const tableBody = document.getElementById('objectives-table-body');
@@ -2146,6 +2328,66 @@ window.toggleSaleInitialPaidField = () => {
     }
   }
 };
+
+async function markSaleAsPaidDirectly(saleId) {
+  if (!confirm(UI.getTranslation('msg_confirm_pay_credit'))) {
+    return;
+  }
+
+  const loader = document.getElementById('loading-overlay');
+  try {
+    if (loader) loader.style.display = 'flex';
+
+    const sales = await DB.getSales();
+    const sale = sales.find(s => s.id === saleId);
+    if (!sale) {
+      throw new Error('Vente non trouvée');
+    }
+
+    const match = sale.notes ? sale.notes.match(/\[PMTS:([\s\S]*?)\]/) : null;
+    let parsedPayments = [];
+    if (match) {
+      try {
+        parsedPayments = JSON.parse(match[1]);
+      } catch(e){}
+    }
+
+    const totalPaid = parsedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const netTotal = Number(sale.net_total) || 0;
+    const balance = Math.max(0, netTotal - totalPaid);
+
+    if (balance > 0) {
+      const newPayment = {
+        amount: balance,
+        method: 'especes',
+        created_at: new Date().toISOString(),
+        receipt_photo: null
+      };
+      parsedPayments.push(newPayment);
+    }
+
+    let originalNotes = sale.notes || '';
+    const cleanNotes = originalNotes.replace(/\[PMTS:[\s\S]*?\]/, '').trim();
+    const newNotes = `[PMTS:${JSON.stringify(parsedPayments)}] ${cleanNotes}`.trim();
+
+    await DB.updateSale(saleId, {
+      payment_status: 'paid',
+      notes: newNotes
+    });
+
+    UI.showToast('msg_save_success', 'success');
+    
+    // Refresh tables
+    await UI.refreshSales();
+    await UI.refreshCredits();
+  } catch (err) {
+    UI.showToast(err.message || 'Erreur', 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+  }
+}
+
+window.markSaleAsPaidDirectly = markSaleAsPaidDirectly;
 
 window.openCreditPaymentModal = async (saleId) => {
   const sales = await DB.getSales();
