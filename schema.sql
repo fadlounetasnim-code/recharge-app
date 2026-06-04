@@ -249,6 +249,9 @@ CREATE POLICY employee_read_own_sales ON public.sales FOR SELECT TO authenticate
 CREATE POLICY employee_insert_own_sales ON public.sales FOR INSERT TO authenticated
   WITH CHECK (employee_id = auth.uid());
 
+CREATE POLICY employee_update_own_sales ON public.sales FOR UPDATE TO authenticated
+  USING (employee_id = auth.uid()) WITH CHECK (employee_id = auth.uid());
+
 -- 6. Stock Movements Policies
 CREATE POLICY admin_supervisor_all_movements ON public.stock_movements FOR ALL TO authenticated
   USING (public.get_user_role() IN ('admin', 'supervisor')) WITH CHECK (public.get_user_role() IN ('admin', 'supervisor'));
