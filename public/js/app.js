@@ -2073,6 +2073,8 @@ function closeActiveModal() {
   document.getElementById('stock-modal').style.display = 'none';
   document.getElementById('receipt-modal').style.display = 'none';
   
+  const creditPaymentModal = document.getElementById('credit-payment-modal');
+  if (creditPaymentModal) creditPaymentModal.style.display = 'none';
   const stockInvoiceModal = document.getElementById('stock-invoice-modal');
   if (stockInvoiceModal) stockInvoiceModal.style.display = 'none';
   const stockInvoiceDetailsModal = document.getElementById('stock-invoice-details-modal');
@@ -2484,52 +2486,57 @@ async function handleCreditPaymentSubmit(e) {
     return;
   }
 
-  const sales = await DB.getSales();
-  const sale = sales.find(s => s.id === saleId);
-  if (!sale) {
-    UI.showToast('Vente non trouvée', 'error');
-    return;
-  }
-
-  const match = sale.notes ? sale.notes.match(/\[PMTS:([\s\S]*?)\]/) : null;
-  let parsedPayments = [];
-  if (match) {
-    try {
-      parsedPayments = JSON.parse(match[1]);
-    } catch(e){}
-  }
-
-  const newPayment = {
-    amount: amount,
-    method: method,
-    created_at: new Date().toISOString(),
-    receipt_photo: method === 'virement' ? creditPaymentPhotoBase64 : null
-  };
-  parsedPayments.push(newPayment);
-
-  const totalPaid = parsedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-  const netTotal = Number(sale.net_total) || 0;
-  const balance = Math.max(0, netTotal - totalPaid);
-
-  let newStatus = 'partial';
-  if (balance <= 0) {
-    newStatus = 'paid';
-  }
-
-  let originalNotes = sale.notes || '';
-  const cleanNotes = originalNotes.replace(/\[PMTS:[\s\S]*?\]/, '').trim();
-  const newNotes = `[PMTS:${JSON.stringify(parsedPayments)}] ${cleanNotes}`.trim();
-
   const loader = document.getElementById('loading-overlay');
   try {
     if (loader) loader.style.display = 'flex';
-    
+
+    const sales = await DB.getSales();
+    const sale = sales.find(s => s.id === saleId);
+    if (!sale) {
+      UI.showToast('Vente non trouvée', 'error');
+      return;
+    }
+
+    const match = sale.notes ? sale.notes.match(/\[PMTS:([\s\S]*?)\]/) : null;
+    let parsedPayments = [];
+    if (match) {
+      try {
+        parsedPayments = JSON.parse(match[1]);
+      } catch(e){}
+    }
+
+    const newPayment = {
+      amount: amount,
+      method: method,
+      created_at: new Date().toISOString(),
+      receipt_photo: method === 'virement' ? creditPaymentPhotoBase64 : null
+    };
+    parsedPayments.push(newPayment);
+
+    const totalPaid = parsedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const netTotal = Number(sale.net_total) || 0;
+    const balance = Math.max(0, netTotal - totalPaid);
+
+    let newStatus = 'partial';
+    if (balance <= 0) {
+      newStatus = 'paid';
+    }
+
+    let originalNotes = sale.notes || '';
+    const cleanNotes = originalNotes.replace(/\[PMTS:[\s\S]*?\]/, '').trim();
+    const newNotes = `[PMTS:${JSON.stringify(parsedPayments)}] ${cleanNotes}`.trim();
+
     await DB.updateSale(saleId, {
       payment_status: newStatus,
       notes: newNotes
     });
 
     UI.showToast('msg_save_success', 'success');
+    
+    // Refresh tables to ensure UI data updates immediately
+    await UI.refreshSales();
+    await UI.refreshCredits();
+    
     closeActiveModal();
     navigateTo('credits');
   } catch (err) {
