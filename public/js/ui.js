@@ -1302,10 +1302,8 @@ const UI = (() => {
       filteredPayments = payments; // Do not filter supplier payments by employee so they deduct correctly for everyone
     }
 
-    if (window.UI && window.UI.showToast) {
-      const activeUrl = localStorage.getItem('supabase_url') || 'default';
-      window.UI.showToast(`Debug DB: url=${activeUrl} | Total Paiements=${payments.length} | Premier=${payments[0] ? payments[0].invoice_number + ' (' + payments[0].amount + ' DH)' : 'Aucun'}`, 'info');
-    }
+    const activeUrl = localStorage.getItem('supabase_url') || 'default';
+    showToast(`Debug DB: url=${activeUrl} | Total Paiements=${payments.length} | Premier=${payments[0] ? payments[0].invoice_number + ' (' + payments[0].amount + ' DH)' : 'Aucun'}`, 'info');
 
     // 1. Grid of Stock items
     const grid = document.getElementById('stock-inventory-grid');
