@@ -667,10 +667,7 @@ const DB = (() => {
     if (useSupabase) {
       const { data, error } = await supabase
         .from('supplier_payments')
-        .select(`
-          *,
-          team_members (full_name)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
       if (!error) return data;
       console.error('Supabase Supplier Payments fetch error:', error);
