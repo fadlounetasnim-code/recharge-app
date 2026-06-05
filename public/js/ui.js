@@ -107,6 +107,7 @@ const UI = (() => {
       activity_lp: "LP : Librairie & Papeterie",
       activity_vpa: "VPA : Vente Portable et Accessoires",
       activity_ky: "KY : Kiosque",
+      activity_fs: "FS : Fruits Secs",
       
       // Sales View
       sales_subtitle: "Liste globale de toutes les transactions et facturations",
@@ -298,6 +299,7 @@ const UI = (() => {
       activity_lp: "LP : مكتبة / خدمات",
       activity_vpa: "VPA : بيع الهواتف والملحقات",
       activity_ky: "KY : كشك",
+      activity_fs: "FS : فواكه جافة",
       
       // Sales View
       sales_subtitle: "السجل الشامل لكل عمليات الفوترة والمبيعات الصادرة",
@@ -1297,7 +1299,7 @@ const UI = (() => {
 
     if (role === 'employee' && user) {
       filteredMovements = movements.filter(m => m.employee_id === user.id);
-      filteredPayments = payments.filter(p => p.employee_id === user.id);
+      filteredPayments = payments; // Do not filter supplier payments by employee so they deduct correctly for everyone
     }
 
     // 1. Grid of Stock items

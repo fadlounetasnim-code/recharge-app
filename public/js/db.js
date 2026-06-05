@@ -674,6 +674,9 @@ const DB = (() => {
         .order('created_at', { ascending: false });
       if (!error) return data;
       console.error('Supabase Supplier Payments fetch error:', error);
+      if (window.UI && window.UI.showToast) {
+        window.UI.showToast('Erreur Supabase: ' + (error.message || JSON.stringify(error)), 'error');
+      }
     }
     const payments = getLocalData('supplier_payments');
     const team = getLocalData('team_members');

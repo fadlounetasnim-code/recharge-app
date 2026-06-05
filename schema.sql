@@ -309,8 +309,8 @@ ALTER TABLE public.supplier_payments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY admin_supervisor_all_payments ON public.supplier_payments FOR ALL TO authenticated
   USING (public.get_user_role() IN ('admin', 'supervisor')) WITH CHECK (public.get_user_role() IN ('admin', 'supervisor'));
 
-CREATE POLICY employee_read_own_payments ON public.supplier_payments FOR SELECT TO authenticated
-  USING (employee_id = auth.uid());
+CREATE POLICY employee_read_all_payments ON public.supplier_payments FOR SELECT TO authenticated
+  USING (true);
 
 CREATE POLICY employee_insert_own_payments ON public.supplier_payments FOR INSERT TO authenticated
   WITH CHECK (employee_id = auth.uid());
