@@ -10,6 +10,43 @@ const getLocalDateStr = (dateInput) => {
   return `${year}-${month}-${day}`;
 };
 
+const compressImage = (file, callback) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width = Math.round((width * MAX_HEIGHT) / height);
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Compress to JPEG with 70% quality to drastically reduce payload size
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+      callback(compressedBase64);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Initialize Database & UI
   UI.translatePage();
@@ -105,17 +142,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     photoInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          paymentPhotoBase64 = event.target.result;
+        compressImage(file, (base64) => {
+          paymentPhotoBase64 = base64;
           const previewImg = document.getElementById('payment-preview-img');
           const previewDiv = document.getElementById('payment-photo-preview');
           if (previewImg && previewDiv) {
             previewImg.src = paymentPhotoBase64;
             previewDiv.style.display = 'block';
           }
-        };
-        reader.readAsDataURL(file);
+        });
       }
     });
   }
@@ -125,17 +160,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     creditPhotoInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          creditPaymentPhotoBase64 = event.target.result;
+        compressImage(file, (base64) => {
+          creditPaymentPhotoBase64 = base64;
           const previewImg = document.getElementById('credit-preview-img');
           const previewDiv = document.getElementById('credit-payment-photo-preview');
           if (previewImg && previewDiv) {
             previewImg.src = creditPaymentPhotoBase64;
             previewDiv.style.display = 'block';
           }
-        };
-        reader.readAsDataURL(file);
+        });
       }
     });
   }
