@@ -211,6 +211,9 @@ const DB = (() => {
         console.error('DB: Error recalculating seller stock:', err);
       }
     }
+    // Filter out Pack SIM category and name completely
+    articles = articles.filter(a => a.category !== 'pack_sim' && a.name !== 'Pack SIM');
+
     return articles;
   };
 
@@ -700,6 +703,117 @@ const DB = (() => {
     return newPayment;
   };
 
+  const cleanupDuplicatePayments = async () => {
+    // Skip completely if the logged-in user is a seller (employee) to optimize load time
+    const sessionStr = localStorage.getItem('recharge_session') || sessionStorage.getItem('recharge_session');
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        if (session?.profile?.role === 'employee') {
+          return;
+        }
+      } catch (e) {}
+    }
+
+    if (localStorage.getItem('duplicate_payments_cleaned_02_06_2026')) {
+      return;
+    }
+
+    let payments = [];
+    if (useSupabase) {
+      const { data, error } = await supabase
+        .from('supplier_payments')
+        .select('*')
+        .eq('invoice_number', '02/06/2026')
+        .order('created_at', { ascending: true });
+      if (error) {
+        console.error('DB: Failed to fetch supplier payments for cleanup:', error);
+        return;
+      }
+      payments = data || [];
+    } else {
+      payments = getLocalData('supplier_payments').filter(p => p.invoice_number === '02/06/2026');
+    }
+
+    if (payments.length > 1) {
+      console.log(`DB: Found ${payments.length} duplicate payments for invoice 02/06/2026. Cleaning up...`);
+      const paymentsToDelete = payments.slice(1);
+      const idsToDelete = paymentsToDelete.map(p => p.id);
+
+      if (useSupabase) {
+        const sessionStr = localStorage.getItem('recharge_session') || sessionStorage.getItem('recharge_session');
+        if (sessionStr) {
+          try {
+            const session = JSON.parse(sessionStr);
+            const role = session?.profile?.role;
+            if (role === 'admin' || role === 'supervisor') {
+              const { error: delError } = await supabase
+                .from('supplier_payments')
+                .delete()
+                .in('id', idsToDelete);
+              if (delError) {
+                console.error('DB: Failed to delete duplicate payments in Supabase:', delError);
+                return;
+              }
+              console.log(`DB: Successfully deleted ${idsToDelete.length} duplicates from Supabase.`);
+            } else {
+              console.log('DB: User is not admin/supervisor. Postponing Supabase cleanup.');
+            }
+          } catch (e) {
+            console.error('DB: Error parsing session during cleanup:', e);
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
+      // Cleanup local storage array
+      const allLocalPayments = getLocalData('supplier_payments');
+      let foundFirst = false;
+      const cleanedLocalPayments = allLocalPayments.filter(p => {
+        if (p.invoice_number === '02/06/2026') {
+          if (!foundFirst) {
+            foundFirst = true;
+            return true;
+          }
+          return false;
+        }
+        return true;
+      });
+      setLocalData('supplier_payments', cleanedLocalPayments);
+      console.log('DB: Successfully cleaned up local storage duplicate payments.');
+    }
+
+    // Only set migration flag if we successfully cleaned up (or if there was nothing to clean up)
+    if (useSupabase) {
+      const sessionStr = localStorage.getItem('recharge_session') || sessionStorage.getItem('recharge_session');
+      if (sessionStr) {
+        try {
+          const session = JSON.parse(sessionStr);
+          const role = session?.profile?.role;
+          if (role === 'admin' || role === 'supervisor') {
+            localStorage.setItem('duplicate_payments_cleaned_02_06_2026', 'true');
+          }
+        } catch (e) {}
+      }
+    } else {
+      localStorage.setItem('duplicate_payments_cleaned_02_06_2026', 'true');
+    }
+  };
+
+  const deleteSupplierPayment = async (id) => {
+    if (useSupabase) {
+      const { error } = await supabase.from('supplier_payments').delete().eq('id', id);
+      if (!error) return true;
+      throw error;
+    }
+    const payments = getLocalData('supplier_payments');
+    const filtered = payments.filter(p => p.id !== id);
+    setLocalData('supplier_payments', filtered);
+    return true;
+  };
+
   const deleteStockInvoice = async (invoiceNumber) => {
     let movementsForInvoice = [];
     let articles = [];
@@ -923,6 +1037,8 @@ const DB = (() => {
     updateStockInvoiceMetadata,
     getSupplierPayments,
     addSupplierPayment,
+    cleanupDuplicatePayments,
+    deleteSupplierPayment,
     getTeamMembers,
     addTeamMember,
     updateTeamMember,

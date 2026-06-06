@@ -308,7 +308,7 @@ function setupAuthenticatedState() {
   });
 
   document.querySelectorAll('[data-nav="settings"]').forEach(el => {
-    el.style.display = role === 'employee' ? 'none' : 'flex';
+    el.style.display = 'flex';
   });
 
   const btnAdjustStock = document.getElementById('btn-adjust-stock-move');
@@ -362,6 +362,11 @@ function setupAuthenticatedState() {
 
   // Render dashboard elements
   navigateTo('dashboard');
+
+  // Cleanup duplicate payments for 02/06/2026
+  if (typeof DB.cleanupDuplicatePayments === 'function') {
+    DB.cleanupDuplicatePayments().catch(err => console.error('Error cleaning up duplicate payments:', err));
+  }
   
   if (loader) loader.style.display = 'none';
 
@@ -1217,18 +1222,107 @@ async function openStockInvoiceModal() {
     container.style.flexDirection = 'column';
     container.style.gap = '4px';
 
-    const isSim = a.category === 'sim' || a.category === 'pack_sim';
-    const priceInputHtml = isSim
-      ? `<input type="number" name="article-price" data-article-id="${a.id}" class="btn-outline article-price-input" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); margin-top:4px;" min="0" step="0.01" value="2.5" placeholder="Prix d'achat (Défaut: 2.5)">`
-      : '';
+    if (a.category === 'sim') {
+      container.innerHTML = `
+        <label class="label" style="font-size:0.8rem;">${a.name} (Stock: ${a.stock_quantity})</label>
+        <div style="display: flex; gap: 8px; flex-direction: column;">
+          <select class="sim-mode-select btn-outline" data-article-id="${a.id}" style="padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+            <option value="simple" data-i18n="opt_sim_mode_simple">Saisie Simple</option>
+            <option value="serial" data-i18n="opt_sim_mode_serial">Numéros de Série</option>
+            <option value="colisage" data-i18n="opt_sim_mode_colisage">Colisage</option>
+          </select>
 
-    container.innerHTML = `
-      <label class="label" style="font-size:0.8rem;">${a.name} (Stock: ${a.stock_quantity})</label>
-      <input type="number" name="article-qty" data-article-id="${a.id}" class="btn-outline article-qty-input" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" value="0">
-      ${priceInputHtml}
-    `;
+          <div class="sim-input-serial-container" style="display:none; gap:8px;">
+            <input type="number" class="sim-serial-start btn-outline" placeholder="N° Début (ex: 89212001)" style="flex:1; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+            <input type="number" class="sim-serial-end btn-outline" placeholder="N° Fin (ex: 89212050)" style="flex:1; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+          </div>
+
+          <div class="sim-input-colisage-container" style="display:none; gap:8px;">
+            <input type="number" class="sim-colis-count btn-outline" placeholder="Nbre de colis" style="flex:1; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+            <input type="number" class="sim-colis-size btn-outline" placeholder="Taille (ex: 50)" style="flex:1; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);">
+          </div>
+
+          <div>
+            <span style="font-size: 0.75rem; color: var(--text-secondary);" data-i18n="label_sim_qty_calculated">Quantité :</span>
+            <input type="number" name="article-qty" data-article-id="${a.id}" class="btn-outline article-qty-input" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" value="0">
+          </div>
+
+          <input type="number" name="article-price" data-article-id="${a.id}" class="btn-outline article-price-input" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" step="0.01" value="2.5" placeholder="Prix d'achat (Défaut: 2.5)">
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <label class="label" style="font-size:0.8rem;">${a.name} (Stock: ${a.stock_quantity})</label>
+        <input type="number" name="article-qty" data-article-id="${a.id}" class="btn-outline article-qty-input" style="width:100%; padding:8px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" min="0" value="0">
+      `;
+    }
     grid.appendChild(container);
+
+    if (a.category === 'sim') {
+      const modeSelect = container.querySelector('.sim-mode-select');
+      const serialContainer = container.querySelector('.sim-input-serial-container');
+      const colisageContainer = container.querySelector('.sim-input-colisage-container');
+      const qtyInput = container.querySelector('.article-qty-input');
+      const serialStart = container.querySelector('.sim-serial-start');
+      const serialEnd = container.querySelector('.sim-serial-end');
+      const colisCount = container.querySelector('.sim-colis-count');
+      const colisSize = container.querySelector('.sim-colis-size');
+
+      const updateCalculatedQty = () => {
+        const mode = modeSelect.value;
+        if (mode === 'simple') {
+          // No auto-calculation
+        } else if (mode === 'serial') {
+          const start = Number(serialStart.value) || 0;
+          const end = Number(serialEnd.value) || 0;
+          if (start > 0 && end >= start) {
+            qtyInput.value = end - start + 1;
+          } else {
+            qtyInput.value = 0;
+          }
+        } else if (mode === 'colisage') {
+          const count = Number(colisCount.value) || 0;
+          const size = Number(colisSize.value) || 0;
+          if (count > 0 && size > 0) {
+            qtyInput.value = count * size;
+          } else {
+            qtyInput.value = 0;
+          }
+        }
+      };
+
+      modeSelect.addEventListener('change', () => {
+        const mode = modeSelect.value;
+        if (mode === 'simple') {
+          serialContainer.style.display = 'none';
+          colisageContainer.style.display = 'none';
+          qtyInput.readOnly = false;
+          qtyInput.style.opacity = '1';
+        } else if (mode === 'serial') {
+          serialContainer.style.display = 'flex';
+          colisageContainer.style.display = 'none';
+          qtyInput.readOnly = true;
+          qtyInput.style.opacity = '0.7';
+          updateCalculatedQty();
+        } else if (mode === 'colisage') {
+          serialContainer.style.display = 'none';
+          colisageContainer.style.display = 'flex';
+          qtyInput.readOnly = true;
+          qtyInput.style.opacity = '0.7';
+          updateCalculatedQty();
+        }
+      });
+
+      serialStart.addEventListener('input', updateCalculatedQty);
+      serialEnd.addEventListener('input', updateCalculatedQty);
+      colisCount.addEventListener('input', updateCalculatedQty);
+      colisSize.addEventListener('input', updateCalculatedQty);
+    }
   });
+
+  if (window.UI && typeof UI.translatePage === 'function') {
+    UI.translatePage();
+  }
 
   // Populate vendor dropdown
   const sellerSelect = document.getElementById('stock-invoice-vendeur-id');
@@ -1264,7 +1358,32 @@ async function handleStockInvoiceSubmit(e) {
   e.preventDefault();
   const invoiceNumber = document.getElementById('stock-invoice-number').value.trim();
   const discountPercentage = Number(document.getElementById('stock-invoice-discount').value) || 0;
-  const notes = document.getElementById('stock-invoice-notes').value.trim();
+  let notes = document.getElementById('stock-invoice-notes').value.trim();
+
+  // Look for Carte SIM inputs and append metadata to notes
+  const simContainer = document.querySelector('#stock-invoice-grid .sim-mode-select');
+  if (simContainer) {
+    const mode = simContainer.value;
+    const qty = Number(document.querySelector('#stock-invoice-grid .article-qty-input[data-article-id="' + simContainer.getAttribute('data-article-id') + '"]').value) || 0;
+    
+    if (qty > 0) {
+      if (mode === 'serial') {
+        const start = document.querySelector('#stock-invoice-grid .sim-serial-start').value.trim();
+        const end = document.querySelector('#stock-invoice-grid .sim-serial-end').value.trim();
+        if (start && end) {
+          const serialNotes = `[Séries: ${start} - ${end}]`;
+          notes = notes ? `${notes} | ${serialNotes}` : serialNotes;
+        }
+      } else if (mode === 'colisage') {
+        const count = document.querySelector('#stock-invoice-grid .sim-colis-count').value.trim();
+        const size = document.querySelector('#stock-invoice-grid .sim-colis-size').value.trim();
+        if (count && size) {
+          const colisNotes = `[Colisage: ${count} x ${size}]`;
+          notes = notes ? `${notes} | ${colisNotes}` : colisNotes;
+        }
+      }
+    }
+  }
 
   if (!invoiceNumber) {
     UI.showToast('Veuillez entrer un numéro de facture.', 'error');
@@ -1542,6 +1661,7 @@ async function showInvoiceDetails(invoiceNumber) {
   document.getElementById('detail-invoice-discount').textContent = `${discountPercentage.toFixed(2)}%`;
   document.getElementById('detail-invoice-net').textContent = `${costNet.toFixed(2)} DH`;
 
+  const role = Auth.getUserRole();
   // Populate payments list
   const payments = await DB.getSupplierPayments();
   const invoicePayments = payments.filter(p => p.invoice_number === invoiceNumber);
@@ -1554,13 +1674,19 @@ async function showInvoiceDetails(invoiceNumber) {
       invoicePayments.forEach(p => {
         const tr = document.createElement('tr');
         const photoBtnHtml = p.receipt_photo 
-          ? `<button type="button" class="btn btn-outline btn-sm text-success" onclick="viewPaymentPhoto('${p.id}')" style="padding:4px 8px; font-size:0.75rem;">Reçu</button>`
-          : '-';
+          ? `<button type="button" class="btn btn-outline btn-sm text-success" onclick="viewPaymentPhoto('${p.id}')" style="padding:4px 8px; font-size:0.75rem; margin-right:4px;">Reçu</button>`
+          : '';
+        const deleteBtnHtml = (role === 'admin' || role === 'supervisor')
+          ? `<button type="button" class="btn btn-outline btn-sm text-danger" onclick="deleteSupplierPayment('${p.id}', '${invoiceNumber}')" style="padding:4px 8px; font-size:0.75rem;">Supprimer</button>`
+          : '';
         tr.innerHTML = `
           <td>${new Date(p.created_at).toLocaleDateString()}</td>
           <td style="font-weight:600;">${Number(p.amount).toFixed(2)} DH</td>
           <td><span style="font-size:0.8rem;">${p.team_members?.full_name || 'Opérateur'}</span></td>
-          <td class="text-right">${photoBtnHtml}</td>
+          <td class="text-right" style="white-space: nowrap;">
+            ${photoBtnHtml}
+            ${deleteBtnHtml}
+          </td>
         `;
         paymentsTbody.appendChild(tr);
       });
@@ -2589,5 +2715,103 @@ function closeMobileMoreSheet() {
   if (sheet) sheet.style.display = 'none';
 }
 
+async function changeUserPassword() {
+  const oldPassword = document.getElementById('setting-old-password').value.trim();
+  const newPassword = document.getElementById('setting-new-password').value.trim();
+  const confirmPassword = document.getElementById('setting-confirm-password').value.trim();
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
+    UI.showToast('Veuillez remplir tous les champs.', 'error');
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    UI.showToast('Les nouveaux mots de passe ne correspondent pas.', 'error');
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    UI.showToast('Le mot de passe doit contenir au moins 6 caractères.', 'error');
+    return;
+  }
+
+  const loader = document.getElementById('loading-overlay');
+  try {
+    if (loader) loader.style.display = 'flex';
+
+    if (DB.getUseSupabase()) {
+      const client = DB.getSupabaseClient();
+      const profile = Auth.getUserProfile();
+      // Background re-authentication to verify old password
+      const { error: signInError } = await client.auth.signInWithPassword({
+        email: profile.email,
+        password: oldPassword
+      });
+      if (signInError) {
+        throw new Error('Ancien mot de passe incorrect.');
+      }
+
+      // Update password
+      const { error: updateError } = await client.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+    } else {
+      // Local storage mode
+      const profile = Auth.getUserProfile();
+      const localTeam = JSON.parse(localStorage.getItem('team_members')) || [];
+      const idx = localTeam.findIndex(t => t.id === profile.id);
+      if (idx !== -1) {
+        const currentPassword = localTeam[idx].password || '123456';
+        if (oldPassword !== currentPassword) {
+          throw new Error('Ancien mot de passe incorrect.');
+        }
+        localTeam[idx].password = newPassword;
+        localStorage.setItem('team_members', JSON.stringify(localTeam));
+        // Update active profile in memory
+        profile.password = newPassword;
+        Auth.updateProfile(profile);
+      } else {
+        throw new Error('Utilisateur non trouvé.');
+      }
+    }
+
+    UI.showToast('Mot de passe mis à jour avec succès.', 'success');
+    document.getElementById('setting-old-password').value = '';
+    document.getElementById('setting-new-password').value = '';
+    document.getElementById('setting-confirm-password').value = '';
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+  }
+}
+
 window.openMobileMoreSheet = openMobileMoreSheet;
 window.closeMobileMoreSheet = closeMobileMoreSheet;
+window.changeUserPassword = changeUserPassword;
+
+async function deleteSupplierPayment(paymentId, invoiceNumber) {
+  if (!confirm(UI.getTranslation('msg_confirm_delete') || 'Voulez-vous vraiment supprimer ce règlement ?')) {
+    return;
+  }
+
+  const loader = document.getElementById('loading-overlay');
+  try {
+    if (loader) loader.style.display = 'flex';
+    await DB.deleteSupplierPayment(paymentId);
+    UI.showToast('msg_delete_success', 'success');
+    
+    // Refresh stock view to recalculate invoice total/balance
+    await UI.refreshStock();
+    
+    // Refresh the open details modal
+    if (typeof showInvoiceDetails === 'function') {
+      await showInvoiceDetails(invoiceNumber);
+    }
+  } catch (err) {
+    UI.showToast(err.message || 'Erreur', 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+  }
+}
+
+window.deleteSupplierPayment = deleteSupplierPayment;

@@ -451,7 +451,6 @@
               <option value="all" data-i18n="opt_all_categories">Toutes les catégories</option>
               <option value="recharge" data-i18n="opt_recharge">Recharge</option>
               <option value="sim" data-i18n="opt_sim">Carte SIM</option>
-              <option value="pack_sim" data-i18n="opt_pack_sim">Pack SIM</option>
             </select>
           </div>
 
@@ -786,6 +785,23 @@
             Si aucun identifiant Supabase n'est fourni, l'application fonctionne en mode hors ligne en utilisant le stockage local du navigateur (LocalStorage).
           </p>
           <button class="btn btn-outline" onclick="clearLocalDatabase()" style="color: var(--crimson); border-color: var(--crimson);" data-i18n="btn_clear_db">Effacer la base de données locale</button>
+        </div>
+
+        <div id="settings-password-card" class="glass-panel" style="max-width: 600px; margin-top: 24px;">
+          <h3 data-i18n="settings_change_password_title" style="margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">Modifier le mot de passe</h3>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="label" data-i18n="label_old_password">Ancien mot de passe</label>
+            <input type="password" id="setting-old-password" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="••••••">
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label class="label" data-i18n="label_new_password">Nouveau mot de passe</label>
+            <input type="password" id="setting-new-password" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="••••••">
+          </div>
+          <div class="form-group" style="margin-bottom:20px;">
+            <label class="label" data-i18n="label_confirm_password">Confirmer le nouveau mot de passe</label>
+            <input type="password" id="setting-confirm-password" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="••••••">
+          </div>
+          <button class="btn btn-primary" onclick="changeUserPassword()" data-i18n="btn_change_password">Modifier le mot de passe</button>
         </div>
       </section>
       
@@ -1323,7 +1339,7 @@
                 <th data-i18n="th_date">Date</th>
                 <th data-i18n="th_amount">Montant</th>
                 <th data-i18n="th_vendeur">Opérateur</th>
-                <th data-i18n="th_receipt" class="text-right">Reçu</th>
+                <th data-i18n="th_actions" class="text-right">Actions</th>
               </tr>
             </thead>
             <tbody id="stock-invoice-payments-body">

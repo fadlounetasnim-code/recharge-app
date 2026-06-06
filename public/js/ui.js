@@ -219,7 +219,16 @@ const UI = (() => {
       msg_access_denied: "Accès refusé !",
       msg_confirm_delete: "Êtes-vous sûr de vouloir supprimer cet élément ?",
       msg_confirm_clear_db: "Voulez-vous vraiment effacer TOUTES les données locales ?",
-      msg_confirm_pay_credit: "Êtes-vous sûr de vouloir marquer cette vente comme entièrement payée ?"
+      msg_confirm_pay_credit: "Êtes-vous sûr de vouloir marquer cette vente comme entièrement payée ?",
+      opt_sim_mode_simple: "Saisie Simple",
+      opt_sim_mode_serial: "Numéros de Série",
+      opt_sim_mode_colisage: "Colisage",
+      label_sim_qty_calculated: "Quantité :",
+      settings_change_password_title: "Modifier le mot de passe",
+      label_old_password: "Ancien mot de passe",
+      label_new_password: "Nouveau mot de passe",
+      label_confirm_password: "Confirmer le nouveau mot de passe",
+      btn_change_password: "Modifier le mot de passe"
     },
     ar: {
       app_title: "مدير الشحن والبطاقات",
@@ -385,7 +394,16 @@ const UI = (() => {
       modal_new_client_title: "زبون جديد",
       modal_import_preview_title: "معاينة الاستيراد",
       btn_confirm_import: "تأكيد الاستيراد",
-      msg_confirm_pay_credit: "هل أنت متأكد من رغبتك في تحديد هذه البيعة كمدفوعة بالكامل؟"
+      msg_confirm_pay_credit: "هل أنت متأكد من رغبتك في تحديد هذه البيعة كمدفوعة بالكامل؟",
+      opt_sim_mode_simple: "إدخال بسيط",
+      opt_sim_mode_serial: "الأرقام التسلسلية",
+      opt_sim_mode_colisage: "التعبئة (Colisage)",
+      label_sim_qty_calculated: "الكمية :",
+      settings_change_password_title: "تغيير كلمة المرور",
+      label_old_password: "كلمة المرور القديمة",
+      label_new_password: "كلمة المرور الجديدة",
+      label_confirm_password: "تأكيد كلمة المرور الجديدة",
+      btn_change_password: "تعديل كلمة المرور"
     }
   };
 
@@ -1302,8 +1320,7 @@ const UI = (() => {
       filteredPayments = payments; // Do not filter supplier payments by employee so they deduct correctly for everyone
     }
 
-    const activeUrl = localStorage.getItem('supabase_url') || 'default';
-    showToast(`Debug DB: url=${activeUrl} | Total Paiements=${payments.length} | Premier=${payments[0] ? payments[0].invoice_number + ' (' + payments[0].amount + ' DH)' : 'Aucun'}`, 'info');
+    // Debug toast removed to prevent it popping up on screen
 
     // 1. Grid of Stock items
     const grid = document.getElementById('stock-inventory-grid');
