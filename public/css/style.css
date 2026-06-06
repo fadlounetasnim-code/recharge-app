@@ -1399,6 +1399,10 @@ body:has(#view-auth.active) .app-container {
   font-family: 'Cairo', 'Inter', sans-serif !important;
 }
 
+.dark-theme .leaflet-tile-container {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
 .dark-theme .leaflet-popup-content-wrapper,
 .dark-theme .leaflet-popup-tip {
   background-color: #1e293b !important;

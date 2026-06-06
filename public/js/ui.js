@@ -869,16 +869,64 @@ const UI = (() => {
     try {
       mapInstance = L.map('clients-map').setView([centerLat, centerLng], 12);
 
-      const isLightTheme = document.body.classList.contains('light-theme');
-      const tileUrl = isLightTheme 
-        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+      const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
       L.tileLayer(tileUrl, {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        subdomains: 'abc',
+        maxZoom: 19
       }).addTo(mapInstance);
+
+      // Get user's current location if possible and show on map
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const userLat = position.coords.latitude;
+            const userLng = position.coords.longitude;
+            const accuracy = position.coords.accuracy || 50;
+
+            // Location accuracy circle
+            L.circle([userLat, userLng], {
+              radius: Math.min(accuracy, 500),
+              fillColor: '#3b82f6',
+              fillOpacity: 0.15,
+              stroke: false
+            }).addTo(mapInstance);
+
+            // User location marker
+            const userMarker = L.circleMarker([userLat, userLng], {
+              radius: 8,
+              fillColor: '#3b82f6',
+              color: '#ffffff',
+              weight: 2,
+              fillOpacity: 1
+            }).addTo(mapInstance);
+
+            const isArabic = currentLanguage === 'ar';
+            userMarker.bindPopup(`
+              <div style="color: var(--text-primary); font-family: sans-serif; font-size: 0.85rem; padding: 4px; text-align: center; font-weight: 600;">
+                ${isArabic ? 'موقعك الحالي' : 'Votre position'}
+              </div>
+            `);
+
+            // If there are no active GPS clients, center the map on the user
+            if (activeGpsClients.length === 0) {
+              mapInstance.setView([userLat, userLng], 14);
+            } else {
+              // Fit bounds to include both user location and clients
+              const bounds = L.latLngBounds([userLat, userLng]);
+              activeGpsClients.forEach(c => {
+                bounds.extend([c.latitude, c.longitude]);
+              });
+              mapInstance.fitBounds(bounds, { padding: [50, 50] });
+            }
+          },
+          (error) => {
+            console.warn("Could not retrieve user location for map:", error);
+          },
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      }
 
       activeGpsClients.forEach(c => {
         const marker = L.marker([c.latitude, c.longitude]).addTo(mapInstance);
