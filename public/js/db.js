@@ -478,6 +478,98 @@ const DB = (() => {
     throw new Error('Sale not found');
   };
 
+  const deleteSale = async (saleId) => {
+    // 1. Fetch sale details
+    let sale = null;
+    let articles = [];
+    if (useSupabase) {
+      const { data, error } = await supabase.from('sales').select('*').eq('id', saleId).single();
+      if (error || !data) throw new Error('Vente introuvable.');
+      sale = data;
+      const { data: arts } = await supabase.from('articles').select('*');
+      articles = arts || [];
+    } else {
+      const sales = getLocalData('sales');
+      sale = sales.find(s => s.id === saleId);
+      if (!sale) throw new Error('Vente introuvable.');
+      articles = getLocalData('articles');
+    }
+
+    // 2. Perform deletion
+    if (useSupabase) {
+      // Find the corresponding stock movement
+      const saleTime = new Date(sale.created_at).getTime();
+      const { data: movements, error: movErr } = await supabase
+        .from('stock_movements')
+        .select('*')
+        .eq('article_id', sale.article_id)
+        .eq('type', 'sale')
+        .eq('quantity', -sale.quantity);
+
+      let closestMov = null;
+      if (!movErr && movements && movements.length > 0) {
+        let minDiff = Infinity;
+        movements.forEach(m => {
+          const mTime = new Date(m.created_at).getTime();
+          const diff = Math.abs(mTime - saleTime);
+          if (diff < minDiff && diff < 60000) { // within 60 seconds
+            minDiff = diff;
+            closestMov = m;
+          }
+        });
+      }
+
+      // If we found the closest movement, delete it and restore stock
+      if (closestMov) {
+        const art = articles.find(a => a.id === closestMov.article_id);
+        if (art) {
+          // Restore stock (subtracting negative quantity adds it back)
+          const { error: updateErr } = await supabase
+            .from('articles')
+            .update({ stock_quantity: art.stock_quantity - closestMov.quantity })
+            .eq('id', closestMov.article_id);
+          if (updateErr) console.error('Failed to restore stock on sale delete:', updateErr);
+        }
+
+        // Delete the stock movement
+        const { error: movDelErr } = await supabase.from('stock_movements').delete().eq('id', closestMov.id);
+        if (movDelErr) console.error('Failed to delete stock movement on sale delete:', movDelErr);
+      }
+
+      // Delete the sale record itself
+      const { error: saleDelErr } = await supabase.from('sales').delete().eq('id', saleId);
+      if (saleDelErr) throw saleDelErr;
+
+    } else {
+      // Local Storage Mode
+      const localSales = getLocalData('sales');
+      const filteredSales = localSales.filter(s => s.id !== saleId);
+      saveLocalData('sales', filteredSales);
+
+      // Revert stock movement
+      const localMovements = getLocalData('stock_movements');
+      const saleTime = new Date(sale.created_at).getTime();
+      
+      const idx = localMovements.findIndex(m => 
+        m.article_id === sale.article_id && 
+        m.type === 'sale' && 
+        m.quantity === -sale.quantity &&
+        Math.abs(new Date(m.created_at).getTime() - saleTime) < 60000
+      );
+
+      if (idx !== -1) {
+        const mov = localMovements[idx];
+        const art = articles.find(a => a.id === mov.article_id);
+        if (art) {
+          art.stock_quantity = art.stock_quantity - mov.quantity; // Restore stock
+          saveLocalData('articles', articles);
+        }
+        localMovements.splice(idx, 1);
+        saveLocalData('stock_movements', localMovements);
+      }
+    }
+  };
+
   const getStockMovements = async () => {
     if (useSupabase) {
       const { data, error } = await supabase
@@ -1030,6 +1122,7 @@ const DB = (() => {
     addSale,
     addSales,
     updateSale,
+    deleteSale,
     getStockMovements,
     addStockMovement,
     addStockInvoice,

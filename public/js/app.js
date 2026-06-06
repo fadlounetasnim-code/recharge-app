@@ -2678,6 +2678,38 @@ async function markSaleAsPaidDirectly(saleId) {
   }
 }
 
+async function deleteSaleRecord(saleId) {
+  const isArabic = UI.getActiveLanguage() === 'ar';
+  const confirmMsg = isArabic 
+    ? "هل أنت متأكد من حذف هذه المبيعات؟ هذا الإجراء سيسترجع أيضاً مخزون السلع." 
+    : "Êtes-vous sûr de vouloir supprimer cette vente ? Cette action rétablira également le stock d'articles.";
+  
+  if (!confirm(confirmMsg)) {
+    return;
+  }
+
+  const loader = document.getElementById('loading-overlay');
+  try {
+    if (loader) loader.style.display = 'flex';
+    
+    await DB.deleteSale(saleId);
+    
+    const successMsg = isArabic ? "تم حذف المبيعات بنجاح واسترجاع المخزون." : "Vente supprimée avec succès et stock rétabli.";
+    UI.showToast(successMsg, 'success');
+    
+    // Refresh the views
+    await UI.refreshSales();
+    await UI.refreshStock();
+    await UI.initDashboard();
+  } catch (err) {
+    console.error(err);
+    UI.showToast(err.message || 'Erreur', 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+  }
+}
+
+window.deleteSaleRecord = deleteSaleRecord;
 window.markSaleAsPaidDirectly = markSaleAsPaidDirectly;
 
 window.openCreditPaymentModal = async (saleId) => {
