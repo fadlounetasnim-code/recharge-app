@@ -1513,7 +1513,6 @@ const UI = (() => {
     refreshTeam,
     refreshCredits,
     updateReportFilters,
-    changeCalendarMonth,
     getActiveLanguage: () => currentLanguage,
     setDateRange: (start, end) => { dashboardStartDate = start; dashboardEndDate = end; },
     getDateRange: () => ({ start: dashboardStartDate, end: dashboardEndDate })
