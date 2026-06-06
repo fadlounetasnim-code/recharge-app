@@ -12,8 +12,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Leaflet Maps CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <!-- Main Stylesheet -->
   <link rel="stylesheet" href="/css/style.css">
   
@@ -26,8 +24,6 @@
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- QRCode Generator -->
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
-  <!-- Leaflet Maps JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <!-- jsPDF & html2pdf -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <!-- SheetJS for Excel and CSV importing -->
@@ -278,17 +274,6 @@
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
-
-        <!-- Dashboard Row: Map -->
-        <div class="dashboard-grid" style="margin-top: 24px; grid-template-columns: 1fr;">
-          <!-- Map -->
-          <div class="glass-panel" style="display: flex; flex-direction: column; padding: 16px;">
-            <div class="panel-header" style="margin-bottom: 8px; flex-shrink: 0;">
-              <h3 style="font-size:1rem; font-weight:600;">Localisation des Clients (Cartographie)</h3>
-            </div>
-            <div id="clients-map" style="height: 350px; border-radius: var(--radius-md); margin-top: 8px; z-index: 1;"></div>
           </div>
         </div>
 
