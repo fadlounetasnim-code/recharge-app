@@ -1,4 +1,4 @@
-const CACHE_NAME = 'recharge-sim-cache-v2';
+const CACHE_NAME = 'recharge-sim-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -14,7 +14,9 @@ const ASSETS_TO_CACHE = [
   'https://cdn.jsdelivr.net/npm/chart.js',
   'https://cdn.jsdelivr.net/npm/html5-qrcode',
   'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
 // Install Event

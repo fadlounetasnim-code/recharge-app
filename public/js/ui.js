@@ -742,10 +742,9 @@ const UI = (() => {
       // Draw Daily Sales Chart
       drawSalesChart(filteredSales);
 
-      // Render clients map and activity calendar
+      // Render clients map
       setTimeout(() => {
         initClientsMap(selectedSeller);
-        renderCalendar(selectedSeller);
       }, 100);
 
     } catch (e) {
@@ -834,7 +833,6 @@ const UI = (() => {
   };
 
   let mapInstance = null;
-  let currentCalendarDate = new Date();
 
   const initClientsMap = async (selectedSeller = 'all') => {
     const clients = await DB.getClients();
@@ -884,12 +882,14 @@ const UI = (() => {
 
       activeGpsClients.forEach(c => {
         const marker = L.marker([c.latitude, c.longitude]).addTo(mapInstance);
+        const actType = c.activity_type ? c.activity_type.toLowerCase() : '';
+        const actLabel = actType ? (getTranslation('activity_' + actType) || c.activity_type) : '-';
         
         marker.bindPopup(`
           <div style="color: var(--text-primary); font-family: sans-serif; font-size: 0.85rem; padding: 4px;">
             <strong style="font-size: 0.95rem; color: var(--text-primary);">${c.full_name}</strong><br/>
             <span style="color: var(--text-secondary); font-weight:600;">Dealer: ${c.dealer_number}</span><br/>
-            <span style="color: var(--text-secondary);">Activité: ${getTranslation('activity_' + c.activity_type.toLowerCase()) || c.activity_type}</span><br/>
+            <span style="color: var(--text-secondary);">Activité: ${actLabel}</span><br/>
             <div style="margin-top: 8px;">
               <button onclick="window.openSalesModal('${c.id}')" style="background:var(--primary); color:#fff; border:none; padding:6px 10px; border-radius:4px; font-weight:600; cursor:pointer; font-size:0.75rem;">Créer Vente</button>
             </div>
@@ -911,197 +911,6 @@ const UI = (() => {
     } catch (err) {
       console.error("Leaflet map initialization failed", err);
     }
-  };
-
-  const renderCalendar = async (selectedSeller = 'all') => {
-    const daysGrid = document.getElementById('calendar-days-grid');
-    const monthYearLabel = document.getElementById('calendar-month-year');
-    if (!daysGrid || !monthYearLabel) return;
-
-    const year = currentCalendarDate.getFullYear();
-    const month = currentCalendarDate.getMonth();
-
-    const isArabic = currentLanguage === 'ar';
-    const monthNamesFR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
-    const monthNamesAR = ["يناير", "فبراير", "مارس", "أبريل", "ماي", "يونيو", "يوليوز", "غشت", "شتنبر", "أكتوبر", "نونبر", "دجنبر"];
-    
-    monthYearLabel.textContent = isArabic 
-      ? `${monthNamesAR[month]} ${year}` 
-      : `${monthNamesFR[month]} ${year}`;
-
-    daysGrid.innerHTML = '';
-
-    const sales = await DB.getSales();
-    const role = Auth.getUserRole();
-    const user = Auth.getUserProfile();
-    const filteredSales = sales.filter(s => {
-      if (role === 'employee' && user) {
-        return s.employee_id === user.id;
-      } else if ((role === 'admin' || role === 'supervisor') && selectedSeller !== 'all') {
-        return s.employee_id === selectedSeller;
-      }
-      return true;
-    });
-    const salesDates = filteredSales.map(s => getLocalDateStr(s.created_at));
-
-    const firstDay = new Date(year, month, 1);
-    let startDay = firstDay.getDay(); 
-    if (startDay === 0) startDay = 7; 
-
-    const totalDays = new Date(year, month + 1, 0).getDate();
-
-    for (let i = 1; i < startDay; i++) {
-      const emptyCell = document.createElement('div');
-      emptyCell.className = 'calendar-day empty';
-      daysGrid.appendChild(emptyCell);
-    }
-
-    const today = new Date();
-    let todayCell = null;
-    let todayDateStr = '';
-
-    for (let day = 1; day <= totalDays; day++) {
-      const dayCell = document.createElement('div');
-      dayCell.className = 'calendar-day';
-      dayCell.textContent = day;
-
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      
-      if (day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
-        dayCell.classList.add('today');
-        todayCell = dayCell;
-        todayDateStr = dateStr;
-      }
-
-      if (salesDates.includes(dateStr)) {
-        dayCell.classList.add('has-activity');
-      }
-
-      dayCell.onclick = () => {
-        document.querySelectorAll('.calendar-day').forEach(d => d.classList.remove('selected'));
-        dayCell.classList.add('selected');
-        filterDashboardSalesByDate(dateStr);
-      };
-
-      daysGrid.appendChild(dayCell);
-    }
-
-    // Automatically click today's cell on load if it exists in this month
-    if (todayCell) {
-      todayCell.classList.add('selected');
-      filterDashboardSalesByDate(todayDateStr);
-    } else {
-      // Otherwise default to the first of the month
-      const firstDateStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      filterDashboardSalesByDate(firstDateStr);
-    }
-
-    // Invalidate map size to ensure it stretches to match the calendar height
-    setTimeout(() => {
-      if (mapInstance) {
-        mapInstance.invalidateSize();
-      }
-    }, 200);
-  };
-
-  const filterDashboardSalesByDate = async (dateStr) => {
-    const sales = await DB.getSales();
-    
-    const role = Auth.getUserRole();
-    const user = Auth.getUserProfile();
-    let filteredSales = sales;
-    if (role === 'employee' && user) {
-      filteredSales = sales.filter(s => s.employee_id === user.id);
-    } else if (role === 'admin' || role === 'supervisor') {
-      const filterSelect = document.getElementById('dashboard-filter-vendeur');
-      const selectedSeller = filterSelect ? filterSelect.value : 'all';
-      if (selectedSeller !== 'all') {
-        filteredSales = sales.filter(s => s.employee_id === selectedSeller);
-      }
-    }
-    
-    const filtered = filteredSales.filter(s => getLocalDateStr(s.created_at) === dateStr);
-
-    // Calculate Summary Stats
-    const uniqueClients = new Set(filtered.map(s => s.client_id)).size;
-    let rechargeQty = 0;
-    let simQty = 0;
-
-    filtered.forEach(s => {
-      const cat = s.articles?.category;
-      if (cat === 'recharge') {
-        rechargeQty += Number(s.quantity) || 0;
-      } else if (cat === 'sim' || cat === 'pack_sim') {
-        simQty += Number(s.quantity) || 0;
-      }
-    });
-
-    // Update Day Summary Panel in DOM
-    const dateLabel = document.getElementById('summary-date-label');
-    const clientsCount = document.getElementById('summary-clients-count');
-    const rechargesCount = document.getElementById('summary-recharges-count');
-    const simsCount = document.getElementById('summary-sims-count');
-    const activityBadge = document.getElementById('summary-activity-badge');
-
-    const isArabic = currentLanguage === 'ar';
-
-    if (dateLabel) {
-      const [y, m, d] = dateStr.split('-');
-      const dateObj = new Date(y, m - 1, d);
-      const formattedDate = dateObj.toLocaleDateString(isArabic ? 'ar-MA' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-      dateLabel.textContent = formattedDate;
-    }
-    if (clientsCount) clientsCount.textContent = uniqueClients;
-    if (rechargesCount) rechargesCount.textContent = `${rechargeQty} ${isArabic ? 'قطع' : 'Pcs'}`;
-    if (simsCount) simsCount.textContent = `${simQty} ${isArabic ? 'قطع' : 'Pcs'}`;
-    if (activityBadge) {
-      activityBadge.style.display = filtered.length > 0 ? 'inline' : 'none';
-      if (isArabic) {
-        activityBadge.textContent = '★ نشاط';
-      } else {
-        activityBadge.textContent = '★ Activité';
-      }
-    }
-
-    const tbody = document.getElementById('dashboard-recent-sales-body');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted);">${isArabic ? 'لا توجد مبيعات في هذا اليوم' : 'Aucune vente enregistrée pour ce jour'}</td></tr>`;
-      return;
-    }
-    
-    filtered.forEach(sale => {
-      const discountStr = sale.discount_type === 'percentage' 
-        ? `${sale.discount_value}% (${sale.discount_amount} DH)` 
-        : sale.discount_type === 'fixed' 
-          ? `${sale.discount_value} DH` 
-          : '-';
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${new Date(sale.created_at).toLocaleDateString()}</td>
-        <td><strong>${sale.clients?.full_name || 'Client'}</strong></td>
-        <td>${sale.articles?.name || 'Recharge'}</td>
-        <td>${sale.quantity}</td>
-        <td>${Number(sale.gross_total).toFixed(2)} DH</td>
-        <td class="text-amber">${discountStr}</td>
-        <td class="text-success" style="font-weight:700;">${Number(sale.net_total).toFixed(2)} DH</td>
-        <td><span class="badge ${sale.payment_status === 'paid' ? 'badge-success' : sale.payment_status === 'unpaid' ? 'badge-crimson' : 'badge-amber'}">${getTranslation('opt_' + sale.payment_status)}</span></td>
-        <td class="text-right">
-          <button class="btn btn-outline btn-sm" onclick="showReceipt('${sale.id}')" title="Ticket">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-          </button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
-  };
-
-  const changeCalendarMonth = (direction) => {
-    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
-    renderCalendar();
   };
 
   // --- Render Tables & Grids ---
@@ -1130,12 +939,15 @@ const UI = (() => {
            </a>`
         : '-';
 
+      const actType = c.activity_type ? c.activity_type.toLowerCase() : '';
+      const actLabel = actType ? (getTranslation('activity_' + actType) || c.activity_type) : '-';
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><strong>${c.full_name}</strong></td>
         <td>${c.phone_number}</td>
         <td><span class="badge badge-info">${c.dealer_number}</span></td>
-        <td>${getTranslation('activity_' + c.activity_type.toLowerCase()) || c.activity_type}</td>
+        <td>${actLabel}</td>
         <td>${c.address || '-'}</td>
         <td>${gpsHtml}</td>
         <td>

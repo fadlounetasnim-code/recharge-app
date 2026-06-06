@@ -702,6 +702,11 @@ function calculateSaleTotals() {
 
 async function handleSalesSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+  }
 
   const clientId = document.getElementById('sale-client-id').value;
   const paymentStatus = document.getElementById('sale-payment-status').value;
@@ -820,6 +825,10 @@ async function handleSalesSubmit(e) {
     UI.showToast(err.message || 'Erreur', 'error');
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -879,6 +888,13 @@ async function openClientModal(client = null) {
 
 async function handleClientSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+  }
+  const loader = document.getElementById('loading-overlay');
+  if (loader) loader.style.display = 'flex';
   const id = document.getElementById('client-form-id').value;
   const full_name = document.getElementById('client-name').value;
   const phone_number = document.getElementById('client-phone').value;
@@ -906,6 +922,12 @@ async function handleClientSubmit(e) {
     UI.refreshClients();
   } catch (err) {
     UI.showToast(err.message || 'Erreur', 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -1108,6 +1130,13 @@ async function openTeamModal(member = null) {
 
 async function handleTeamSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+  }
+  const loader = document.getElementById('loading-overlay');
+  if (loader) loader.style.display = 'flex';
   const id = document.getElementById('team-form-id').value;
   const full_name = document.getElementById('team-name').value;
   const email = document.getElementById('team-email').value;
@@ -1140,6 +1169,12 @@ async function handleTeamSubmit(e) {
     UI.refreshTeam();
   } catch (err) {
     UI.showToast(err.message, 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -1180,6 +1215,13 @@ async function openStockMovementModal() {
 
 async function handleStockSubmit(e) {
   e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+  }
+  const loader = document.getElementById('loading-overlay');
+  if (loader) loader.style.display = 'flex';
   const articleId = document.getElementById('stock-article-id').value;
   const type = document.getElementById('stock-movement-type').value;
   const qty = Number(document.getElementById('stock-quantity-input').value);
@@ -1206,6 +1248,12 @@ async function handleStockSubmit(e) {
     UI.refreshStock();
   } catch (err) {
     UI.showToast(err.message, 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -1415,8 +1463,13 @@ async function handleStockInvoiceSubmit(e) {
   const selectedSellerId = document.getElementById('stock-invoice-vendeur-id')?.value;
   const targetEmployeeId = selectedSellerId ? selectedSellerId : (user ? user.id : null);
   const loader = document.getElementById('loading-overlay');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
   try {
     if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
     await DB.addStockInvoice(invoiceNumber, items, targetEmployeeId, notes, discountPercentage);
     UI.showToast('msg_save_success', 'success');
     closeActiveModal();
@@ -1425,6 +1478,10 @@ async function handleStockInvoiceSubmit(e) {
     UI.showToast(err.message || 'Erreur', 'error');
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -1519,8 +1576,13 @@ async function handleStockTransferSubmit(e) {
   }
   
   const loader = document.getElementById('loading-overlay');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
   try {
     if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
     await DB.addStockTransfer(sourceId, destId, articleId, qty, notes);
     UI.showToast("Transfert effectué avec succès !", "success");
     closeActiveModal();
@@ -1529,6 +1591,10 @@ async function handleStockTransferSubmit(e) {
     UI.showToast(err.message || "Erreur de transfert", "error");
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -1586,8 +1652,13 @@ async function handleEditStockInvoiceSubmit(e) {
   }
 
   const loader = document.getElementById('loading-overlay');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
   try {
     if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
     await DB.updateStockInvoiceMetadata(oldInvoiceNumber, newInvoiceNumber, discountPercentage, notes);
     UI.showToast('msg_save_success', 'success');
     closeActiveModal();
@@ -1596,6 +1667,10 @@ async function handleEditStockInvoiceSubmit(e) {
     UI.showToast(err.message || 'Erreur', 'error');
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -1768,8 +1843,13 @@ async function handleSupplierPaymentSubmit(e) {
   };
 
   const loader = document.getElementById('loading-overlay');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
   try {
     if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
     await DB.addSupplierPayment(paymentRecord);
     UI.showToast('msg_save_success', 'success');
     closeActiveModal();
@@ -1778,6 +1858,10 @@ async function handleSupplierPaymentSubmit(e) {
     UI.showToast(err.message || 'Erreur', 'error');
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -2303,12 +2387,12 @@ window.triggerClientImport = () => {
   if (fileInput) fileInput.click();
 };
 
-window.handleClientImport = (event) => {
+window.handleClientImport = async (event) => {
   const file = event.target.files[0];
   if (!file) return;
   
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const data = new Uint8Array(e.target.result);
       if (typeof XLSX === 'undefined') {
@@ -2443,6 +2527,31 @@ window.handleClientImport = (event) => {
         tbody.appendChild(tr);
       }
       
+      // Populate vendor dropdown for import
+      const importSellerSelect = document.getElementById('import-vendeur-id');
+      const importAssignGroup = document.getElementById('import-assign-group');
+      if (importSellerSelect) {
+        importSellerSelect.innerHTML = '<option value="">-- Laisser vide / Non assigné --</option>';
+        const team = await DB.getTeamMembers();
+        const activeEmployees = team.filter(t => t.role === 'employee' && t.is_active);
+        activeEmployees.forEach(emp => {
+          const opt = document.createElement('option');
+          opt.value = emp.id;
+          opt.textContent = emp.full_name;
+          importSellerSelect.appendChild(opt);
+        });
+
+        const role = Auth.getUserRole();
+        const user = Auth.getUserProfile();
+        if (role === 'employee' && user) {
+          if (importAssignGroup) importAssignGroup.style.display = 'none';
+          importSellerSelect.value = user.id;
+        } else {
+          if (importAssignGroup) importAssignGroup.style.display = 'block';
+          importSellerSelect.value = '';
+        }
+      }
+
       // Open preview modal
       document.getElementById('modal-overlay').style.display = 'block';
       document.getElementById('client-import-modal').style.display = 'block';
@@ -2462,9 +2571,21 @@ window.confirmClientImport = async () => {
   if (!window.tempImportedClients || window.tempImportedClients.length === 0) return;
   
   const loader = document.getElementById('loading-overlay');
-  if (loader) loader.style.display = 'flex';
-  
+  const submitBtn = document.querySelector('#client-import-modal button.btn-primary');
   try {
+    if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
+
+    const selectedSellerId = document.getElementById('import-vendeur-id')?.value;
+    if (selectedSellerId) {
+      window.tempImportedClients.forEach(c => {
+        c.created_by = selectedSellerId;
+      });
+    }
+    
     await DB.addClients(window.tempImportedClients);
     UI.showToast("Importation réussie avec succès !", "success");
     closeActiveModal();
@@ -2474,6 +2595,10 @@ window.confirmClientImport = async () => {
     UI.showToast(err.message || "Erreur d'importation", "error");
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
     window.tempImportedClients = null;
   }
 };
@@ -2496,8 +2621,13 @@ async function markSaleAsPaidDirectly(saleId) {
   }
 
   const loader = document.getElementById('loading-overlay');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
   try {
     if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
 
     const sales = await DB.getSales();
     const sale = sales.find(s => s.id === saleId);
@@ -2702,6 +2832,10 @@ async function handleCreditPaymentSubmit(e) {
     UI.showToast(err.message || 'Erreur', 'error');
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 
@@ -2736,15 +2870,25 @@ async function changeUserPassword() {
   }
 
   const loader = document.getElementById('loading-overlay');
+  const submitBtn = document.querySelector('#settings-password-card button.btn-primary');
   try {
     if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
 
     if (DB.getUseSupabase()) {
       const client = DB.getSupabaseClient();
-      const profile = Auth.getUserProfile();
+      const { data: { user }, error: userError } = await client.auth.getUser();
+      if (userError || !user) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
+      const email = user.email;
+
       // Background re-authentication to verify old password
       const { error: signInError } = await client.auth.signInWithPassword({
-        email: profile.email,
+        email: email,
         password: oldPassword
       });
       if (signInError) {
@@ -2782,6 +2926,10 @@ async function changeUserPassword() {
     UI.showToast(err.message, 'error');
   } finally {
     if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
   }
 }
 

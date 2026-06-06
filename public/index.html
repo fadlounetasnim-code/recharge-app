@@ -281,54 +281,14 @@
           </div>
         </div>
 
-        <!-- Dashboard Row: Map & Calendar -->
-        <div class="dashboard-grid" style="margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: stretch;">
+        <!-- Dashboard Row: Map -->
+        <div class="dashboard-grid" style="margin-top: 24px; grid-template-columns: 1fr;">
           <!-- Map -->
-          <div class="glass-panel" style="display: flex; flex-direction: column; padding: 16px; height: 100%;">
+          <div class="glass-panel" style="display: flex; flex-direction: column; padding: 16px;">
             <div class="panel-header" style="margin-bottom: 8px; flex-shrink: 0;">
               <h3 style="font-size:1rem; font-weight:600;">Localisation des Clients (Cartographie)</h3>
             </div>
-            <div id="clients-map" style="flex: 1; min-height: 250px; border-radius: var(--radius-md); margin-top: 8px; z-index: 1;"></div>
-          </div>
-          
-          <!-- Calendar -->
-          <div class="glass-panel" style="display: flex; flex-direction: column; padding: 16px; height: 100%;">
-            <div class="panel-header" style="margin-bottom: 8px; flex-shrink: 0;">
-              <h3 style="font-size:1rem; font-weight:600;">Calendrier d'Activité</h3>
-            </div>
-            <div class="calendar-wrapper" style="margin-top: 8px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 12px;">
-              <div class="calendar-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-shrink: 0;">
-                <button type="button" class="btn btn-outline btn-sm" onclick="changeCalendarMonth(-1)" style="padding: 2px 6px; font-size: 0.75rem;">&larr;</button>
-                <strong id="calendar-month-year" style="color:var(--text-primary); font-size: 0.95rem;">--</strong>
-                <button type="button" class="btn btn-outline btn-sm" onclick="changeCalendarMonth(1)" style="padding: 2px 6px; font-size: 0.75rem;">&rarr;</button>
-              </div>
-              <div class="calendar-weekdays" style="display:grid; grid-template-columns:repeat(7, 1fr); text-align:center; font-size:0.75rem; color:var(--text-muted); font-weight:600; margin-bottom:8px; flex-shrink: 0;">
-                <span>Lu</span><span>Ma</span><span>Me</span><span>Je</span><span>Ve</span><span>Sa</span><span>Di</span>
-              </div>
-              <div id="calendar-days-grid" style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; text-align:center; flex: 1;">
-                <!-- JS populated -->
-              </div>
-            </div>
-
-            <!-- Selected Day Summary Panel -->
-            <div id="calendar-day-summary" style="margin-top: auto; padding: 12px; border-radius: var(--radius-md); background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px;">
-              <div style="font-weight: 700; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 6px; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center;">
-                <span id="summary-date-label">Date: --/--/----</span>
-                <span id="summary-activity-badge" style="color: var(--success); font-size: 0.75rem; display: none;">★ Activité</span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--text-secondary);" data-i18n="summary_clients">Clients vus :</span>
-                <strong id="summary-clients-count" style="color: var(--text-primary);">0</strong>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--text-secondary);" data-i18n="summary_recharges">Recharges vendues :</span>
-                <strong id="summary-recharges-count" style="color: var(--text-primary);">0 Pcs</strong>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--text-secondary);" data-i18n="summary_sims">SIMs vendues :</span>
-                <strong id="summary-sims-count" style="color: var(--text-primary);">0 Pcs</strong>
-              </div>
-            </div>
+            <div id="clients-map" style="height: 350px; border-radius: var(--radius-md); margin-top: 8px; z-index: 1;"></div>
           </div>
         </div>
 
@@ -1621,6 +1581,12 @@
       </div>
       <div class="modal-body" style="padding-top:16px;">
         <p id="client-import-summary" style="margin-bottom:16px; color:var(--text-secondary);"></p>
+        <div id="import-assign-group" class="form-group" style="margin-bottom:16px;">
+          <label class="label" style="font-weight:600; margin-bottom:6px;">Assigner ces clients à un vendeur :</label>
+          <select id="import-vendeur-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+            <!-- populated by JS -->
+          </select>
+        </div>
         <div class="table-responsive" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 20px;">
           <table class="table">
             <thead>
