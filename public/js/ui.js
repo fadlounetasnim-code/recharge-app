@@ -860,7 +860,12 @@ const UI = (() => {
       filteredClients = clients.filter(c => c.created_by === selectedSeller);
     }
     
-    const activeGpsClients = filteredClients.filter(c => c.latitude && c.longitude);
+    const activeGpsClients = filteredClients.filter(c => {
+      const lat = Number(c.latitude);
+      const lng = Number(c.longitude);
+      return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+    });
+
     if (activeGpsClients.length > 0) {
       centerLat = activeGpsClients.reduce((sum, c) => sum + Number(c.latitude), 0) / activeGpsClients.length;
       centerLng = activeGpsClients.reduce((sum, c) => sum + Number(c.longitude), 0) / activeGpsClients.length;
@@ -868,6 +873,14 @@ const UI = (() => {
 
     try {
       mapInstance = L.map('clients-map').setView([centerLat, centerLng], 12);
+
+      // Use ResizeObserver to auto-invalidate map size when container is displayed or resized
+      if (window.ResizeObserver) {
+        const observer = new ResizeObserver(() => {
+          if (mapInstance) mapInstance.invalidateSize();
+        });
+        observer.observe(mapContainer);
+      }
 
       const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
@@ -924,12 +937,20 @@ const UI = (() => {
           (error) => {
             console.warn("Could not retrieve user location for map:", error);
           },
-          { enableHighAccuracy: true, timeout: 5000 }
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
         );
       }
 
       activeGpsClients.forEach(c => {
-        const marker = L.marker([c.latitude, c.longitude]).addTo(mapInstance);
+        // Use L.circleMarker for client markers to bypass default icon assets paths issues
+        const marker = L.circleMarker([c.latitude, c.longitude], {
+          radius: 7,
+          fillColor: '#9c1278', // Premium magenta theme color
+          color: '#ffffff',
+          weight: 2,
+          fillOpacity: 0.9
+        }).addTo(mapInstance);
+
         const actType = c.activity_type ? c.activity_type.toLowerCase() : '';
         const actLabel = actType ? (getTranslation('activity_' + actType) || c.activity_type) : '-';
         
