@@ -754,6 +754,25 @@ const UI = (() => {
     const canvas = document.getElementById('sales-trend-chart');
     if (!canvas) return;
 
+    // Helper to safely add alpha opacity to theme-aware CSS colors
+    const getRgbaColor = (colorStr, alpha) => {
+      const clean = colorStr.trim();
+      if (clean.startsWith('#')) {
+        const hex = clean.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+      if (clean.startsWith('rgb')) {
+        if (clean.startsWith('rgba')) {
+          return clean.replace(/[^,]+(?=\))/, ` ${alpha}`);
+        }
+        return clean.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+      }
+      return clean;
+    };
+
     // Group sales by date
     const dailyData = {};
     sales.slice().reverse().forEach(sale => {
@@ -765,9 +784,22 @@ const UI = (() => {
       dailyData[dateStr].discount += Number(sale.discount_amount) || 0;
     });
 
-    const labels = Object.keys(dailyData).slice(-10); // Last 10 days
-    const netValues = labels.map(l => dailyData[l].net);
-    const discountValues = labels.map(l => dailyData[l].discount);
+    // Generate last 7 days to draw a premium continuous timeline
+    const labels = [];
+    const netValues = [];
+    const discountValues = [];
+    const now = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(now.getDate() - i);
+      const dateStr = d.toLocaleDateString();
+      labels.push(dateStr);
+      
+      const dayData = dailyData[dateStr] || { net: 0, discount: 0 };
+      netValues.push(dayData.net);
+      discountValues.push(dayData.discount);
+    }
 
     if (salesChartInstance) {
       salesChartInstance.destroy();
@@ -776,10 +808,20 @@ const UI = (() => {
     const isArabic = currentLanguage === 'ar';
     const computedStyle = getComputedStyle(document.body);
     const primaryColor = computedStyle.getPropertyValue('--primary').trim() || '#831cb5';
-    const primaryColorLight = computedStyle.getPropertyValue('--primary-light').trim() || 'rgba(131, 28, 181, 0.08)';
     const textPrimaryColor = computedStyle.getPropertyValue('--text-primary').trim() || '#4a0c70';
     const textSecondaryColor = computedStyle.getPropertyValue('--text-secondary').trim() || '#7b5b9c';
-    const gridColor = document.body.classList.contains('light-theme') ? 'rgba(129, 30, 193, 0.04)' : 'rgba(255, 255, 255, 0.05)';
+    const gridColor = document.body.classList.contains('light-theme') ? 'rgba(129, 30, 193, 0.08)' : 'rgba(255, 255, 255, 0.08)';
+
+    // Create Canvas Gradients
+    const ctx = canvas.getContext('2d');
+    
+    const gradientNet = ctx.createLinearGradient(0, 0, 0, 300);
+    gradientNet.addColorStop(0, getRgbaColor(primaryColor, 0.35)); 
+    gradientNet.addColorStop(1, getRgbaColor(primaryColor, 0.0)); 
+
+    const gradientDiscount = ctx.createLinearGradient(0, 0, 0, 300);
+    gradientDiscount.addColorStop(0, 'rgba(251, 146, 60, 0.25)'); // Orange
+    gradientDiscount.addColorStop(1, 'rgba(251, 146, 60, 0.0)'); 
 
     salesChartInstance = new Chart(canvas, {
       type: 'line',
@@ -790,39 +832,102 @@ const UI = (() => {
             label: isArabic ? 'مبيعات صافية (DH)' : 'Chiffre Net (DH)',
             data: netValues,
             borderColor: primaryColor,
-            backgroundColor: primaryColorLight,
+            backgroundColor: gradientNet,
             fill: true,
-            tension: 0.3,
-            borderWidth: 3
+            tension: 0.4,
+            borderWidth: 3,
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: primaryColor,
+            pointBorderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: primaryColor,
+            pointHoverBorderColor: '#ffffff',
+            pointHoverBorderWidth: 2
           },
           {
             label: isArabic ? 'مجموع التخفيضات (DH)' : 'Remises Accordées (DH)',
             data: discountValues,
             borderColor: '#fb923c',
-            backgroundColor: 'transparent',
+            backgroundColor: gradientDiscount,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
             borderDash: [5, 5],
-            tension: 0.3,
-            borderWidth: 2
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: '#fb923c',
+            pointBorderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#fb923c',
+            pointHoverBorderColor: '#ffffff',
+            pointHoverBorderWidth: 2
           }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
         plugins: {
           legend: {
             position: 'top',
-            labels: { color: textPrimaryColor }
+            labels: {
+              color: textPrimaryColor,
+              font: {
+                family: isArabic ? 'Cairo, sans-serif' : 'Inter, sans-serif',
+                size: 12,
+                weight: '600'
+              },
+              padding: 16
+            }
+          },
+          tooltip: {
+            backgroundColor: document.body.classList.contains('light-theme') ? '#ffffff' : '#1e293b',
+            titleColor: textPrimaryColor,
+            bodyColor: textPrimaryColor,
+            borderColor: document.body.classList.contains('light-theme') ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8,
+            titleFont: {
+              family: isArabic ? 'Cairo, sans-serif' : 'Inter, sans-serif',
+              size: 12,
+              weight: 'bold'
+            },
+            bodyFont: {
+              family: isArabic ? 'Cairo, sans-serif' : 'Inter, sans-serif',
+              size: 12
+            }
           }
         },
         scales: {
           x: {
             grid: { display: false },
-            ticks: { color: textSecondaryColor }
+            ticks: {
+              color: textSecondaryColor,
+              font: {
+                family: isArabic ? 'Cairo, sans-serif' : 'Inter, sans-serif',
+                size: 11
+              }
+            }
           },
           y: {
-            grid: { color: gridColor },
-            ticks: { color: textSecondaryColor }
+            grid: {
+              color: gridColor,
+              drawBorder: false,
+              borderDash: [4, 4]
+            },
+            ticks: {
+              color: textSecondaryColor,
+              font: {
+                family: isArabic ? 'Cairo, sans-serif' : 'Inter, sans-serif',
+                size: 11
+              }
+            }
           }
         }
       }
