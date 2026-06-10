@@ -1104,6 +1104,45 @@ const DB = (() => {
     }
   };
 
+  const uploadToCloudinary = async (base64Data) => {
+    if (!base64Data) return null;
+    if (base64Data.startsWith('http://') || base64Data.startsWith('https://')) {
+      return base64Data;
+    }
+
+    const cloudName = 'dfaywbt8p';
+    const apiKey = '468378781318265';
+    const apiSecret = 'DcNu-GiMLQci0GcK4ojXNmddNKg';
+
+    const timestamp = Math.round(new Date().getTime() / 1000);
+    const signString = `timestamp=${timestamp}${apiSecret}`;
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode(signString);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-1', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const signature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const formData = new FormData();
+    formData.append('file', base64Data);
+    formData.append('api_key', apiKey);
+    formData.append('timestamp', timestamp.toString());
+    formData.append('signature', signature);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Cloudinary error: ${res.status} ${errText}`);
+    }
+
+    const result = await res.json();
+    return result.secure_url;
+  };
+
   return {
     init,
     getSupabaseClient: () => supabase,
@@ -1140,6 +1179,7 @@ const DB = (() => {
     saveDailyReport,
     getCentralStock,
     getSellerStock,
-    addStockTransfer
+    addStockTransfer,
+    uploadToCloudinary
   };
 })();

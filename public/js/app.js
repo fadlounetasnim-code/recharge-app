@@ -1834,14 +1834,6 @@ async function handleSupplierPaymentSubmit(e) {
     return;
   }
 
-  const user = Auth.getUserProfile();
-  const paymentRecord = {
-    invoice_number: invoiceNumber,
-    amount: amount,
-    receipt_photo: paymentPhotoBase64,
-    employee_id: user.id
-  };
-
   const loader = document.getElementById('loading-overlay');
   const submitBtn = e.target.querySelector('button[type="submit"]');
   try {
@@ -1850,6 +1842,24 @@ async function handleSupplierPaymentSubmit(e) {
       submitBtn.disabled = true;
       submitBtn.style.opacity = '0.5';
     }
+
+    // Upload photo to Cloudinary first
+    let cloudinaryUrl = null;
+    try {
+      cloudinaryUrl = await DB.uploadToCloudinary(paymentPhotoBase64);
+    } catch (uploadErr) {
+      console.error(uploadErr);
+      throw new Error("Erreur d'upload photo Cloudinary : " + uploadErr.message);
+    }
+
+    const user = Auth.getUserProfile();
+    const paymentRecord = {
+      invoice_number: invoiceNumber,
+      amount: amount,
+      receipt_photo: cloudinaryUrl,
+      employee_id: user.id
+    };
+
     await DB.addSupplierPayment(paymentRecord);
     UI.showToast('msg_save_success', 'success');
     closeActiveModal();
@@ -2808,14 +2818,30 @@ async function handleCreditPaymentSubmit(e) {
   }
 
   const loader = document.getElementById('loading-overlay');
+  const submitBtn = e.target.querySelector('button[type="submit"]');
   try {
     if (loader) loader.style.display = 'flex';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.5';
+    }
 
     const sales = await DB.getSales();
     const sale = sales.find(s => s.id === saleId);
     if (!sale) {
       UI.showToast('Vente non trouvée', 'error');
       return;
+    }
+
+    // Upload photo to Cloudinary first if method is virement
+    let cloudinaryUrl = null;
+    if (method === 'virement' && creditPaymentPhotoBase64) {
+      try {
+        cloudinaryUrl = await DB.uploadToCloudinary(creditPaymentPhotoBase64);
+      } catch (uploadErr) {
+        console.error(uploadErr);
+        throw new Error("Erreur d'upload photo Cloudinary : " + uploadErr.message);
+      }
     }
 
     const match = sale.notes ? sale.notes.match(/\[PMTS:([\s\S]*?)\]/) : null;
@@ -2830,7 +2856,7 @@ async function handleCreditPaymentSubmit(e) {
       amount: amount,
       method: method,
       created_at: new Date().toISOString(),
-      receipt_photo: method === 'virement' ? creditPaymentPhotoBase64 : null
+      receipt_photo: cloudinaryUrl
     };
     parsedPayments.push(newPayment);
 
