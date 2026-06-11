@@ -142,18 +142,97 @@ const DB = (() => {
   };
 
   const addClients = async (clientsList) => {
+    // 1. Deduplicate clientsList by dealer_number (case-insensitive) to prevent PostgreSQL duplicate conflict key errors in the same batch
+    const uniqueMap = new Map();
+    clientsList.forEach(c => {
+      if (c.dealer_number) {
+        uniqueMap.set(c.dealer_number.trim().toLowerCase(), c);
+      }
+    });
+    const uniqueClients = Array.from(uniqueMap.values());
+
     if (useSupabase) {
-      const { data, error } = await supabase
+      // 2. Fetch existing clients to separate inserts from updates (respecting RLS constraints)
+      const { data: existingClients, error: fetchError } = await supabase
         .from('clients')
-        .upsert(clientsList, { onConflict: 'dealer_number' })
-        .select();
-      if (!error) return data;
-      throw error;
+        .select('id, dealer_number, created_by');
+      
+      if (fetchError) throw fetchError;
+
+      const existingMap = new Map();
+      existingClients.forEach(c => {
+        existingMap.set(c.dealer_number.trim().toLowerCase(), c);
+      });
+
+      const toInsert = [];
+      const toUpdate = [];
+
+      const role = Auth.getUserRole();
+      const user = Auth.getUserProfile();
+
+      uniqueClients.forEach(c => {
+        const key = c.dealer_number.trim().toLowerCase();
+        if (existingMap.has(key)) {
+          const existing = existingMap.get(key);
+          // Only update if admin/supervisor, or if employee owns the client
+          const canUpdate = (role === 'admin' || role === 'supervisor' || (role === 'employee' && user && existing.created_by === user.id));
+          if (canUpdate) {
+            toUpdate.push({
+              id: existing.id,
+              ...c
+            });
+          }
+        } else {
+          toInsert.push(c);
+        }
+      });
+
+      let results = [];
+      
+      // Perform inserts in bulk
+      if (toInsert.length > 0) {
+        const { data: insData, error: insError } = await supabase
+          .from('clients')
+          .insert(toInsert)
+          .select();
+        if (insError) throw insError;
+        if (insData) results = results.concat(insData);
+      }
+
+      // Perform updates in bulk or individually
+      if (toUpdate.length > 0) {
+        const { data: updData, error: updError } = await supabase
+          .from('clients')
+          .upsert(toUpdate)
+          .select();
+        if (updError) {
+          console.warn("Bulk upsert failed, trying individual updates...", updError);
+          for (const item of toUpdate) {
+            try {
+              const { data: singleData, error: singleError } = await supabase
+                .from('clients')
+                .update(item)
+                .eq('id', item.id)
+                .select();
+              if (!singleError && singleData) {
+                results = results.concat(singleData);
+              }
+            } catch (e) {
+              console.error(`Failed to update client ${item.dealer_number}:`, e);
+            }
+          }
+        } else if (updData) {
+          results = results.concat(updData);
+        }
+      }
+
+      return results;
     }
+
     const clients = getLocalData('clients');
     const newClients = [];
-    clientsList.forEach((c, i) => {
-      const existingIdx = clients.findIndex(x => x.dealer_number === c.dealer_number);
+    uniqueClients.forEach((c, i) => {
+      const existingIdx = clients.findIndex(x => x.dealer_number.trim().toLowerCase() === c.dealer_number.trim().toLowerCase());
       if (existingIdx !== -1) {
         clients[existingIdx] = {
           ...clients[existingIdx],

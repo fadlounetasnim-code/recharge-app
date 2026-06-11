@@ -2608,12 +2608,19 @@ window.confirmClientImport = async () => {
       submitBtn.style.opacity = '0.5';
     }
 
+    const role = Auth.getUserRole();
+    const user = Auth.getUserProfile();
     const selectedSellerId = document.getElementById('import-vendeur-id')?.value;
-    if (selectedSellerId) {
-      window.tempImportedClients.forEach(c => {
+
+    window.tempImportedClients.forEach(c => {
+      if (role === 'employee' && user) {
+        c.created_by = user.id;
+      } else if (selectedSellerId) {
         c.created_by = selectedSellerId;
-      });
-    }
+      } else {
+        c.created_by = null;
+      }
+    });
     
     await DB.addClients(window.tempImportedClients);
     UI.showToast("Importation réussie avec succès !", "success");
