@@ -287,6 +287,37 @@ const DB = (() => {
     return true;
   };
 
+  const bulkDeleteClients = async (ids) => {
+    if (useSupabase) {
+      const { error } = await supabase.from('clients').delete().in('id', ids);
+      if (!error) return true;
+      throw error;
+    }
+    const clients = getLocalData('clients');
+    const filtered = clients.filter(c => !ids.includes(c.id));
+    setLocalData('clients', filtered);
+    return true;
+  };
+
+  const bulkAssignClients = async (ids, employeeId) => {
+    const val = employeeId === 'none' ? null : employeeId;
+    if (useSupabase) {
+      const { error } = await supabase.from('clients').update({ created_by: val }).in('id', ids);
+      if (!error) return true;
+      throw error;
+    }
+    const clients = getLocalData('clients');
+    const updated = clients.map(c => {
+      if (ids.includes(c.id)) {
+        return { ...c, created_by: val, updated_at: new Date().toISOString() };
+      }
+      return c;
+    });
+    setLocalData('clients', updated);
+    return true;
+  };
+
+
   // --- Articles (Stock Catalog) CRUD ---
   const getArticles = async () => {
     let articles = [];
@@ -1260,6 +1291,8 @@ const DB = (() => {
     addClients,
     updateClient,
     deleteClient,
+    bulkDeleteClients,
+    bulkAssignClients,
     getArticles,
     addArticle,
     updateArticle,

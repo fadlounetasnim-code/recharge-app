@@ -946,13 +946,72 @@ const UI = (() => {
 
     const role = Auth.getUserRole();
     const user = Auth.getUserProfile();
+
+    // Reset select-all checkbox and hide bulk bar
+    const selectAllChk = document.getElementById('client-select-all');
+    if (selectAllChk) selectAllChk.checked = false;
+    const bulkBar = document.getElementById('clients-bulk-bar');
+    if (bulkBar) bulkBar.style.display = 'none';
+
+    // Populate filter-vendeur and select boxes
+    const filterSelect = document.getElementById('client-filter-vendeur');
+    const bulkSelect = document.getElementById('client-select-by-vendeur');
+    const bulkAssignSelect = document.getElementById('bulk-assign-vendeur');
+    
+    if (role === 'admin' || role === 'supervisor') {
+      const team = await DB.getTeamMembers();
+      const sellers = team.filter(t => t.role === 'employee' || t.role === 'supervisor' || t.role === 'admin');
+      
+      if (filterSelect) {
+        const currentFilterValue = filterSelect.value || 'all';
+        filterSelect.innerHTML = `
+          <option value="all">Tous les vendeurs</option>
+          <option value="none">Non assigné</option>
+          ${sellers.map(s => `<option value="${s.id}">${s.full_name}</option>`).join('')}
+        `;
+        filterSelect.value = currentFilterValue;
+        filterSelect.style.display = 'block';
+      }
+      
+      if (bulkSelect) {
+        bulkSelect.innerHTML = `
+          <option value="">-- Sélectionner --</option>
+          <option value="none">Non assignés</option>
+          ${sellers.map(s => `<option value="${s.id}">${s.full_name}</option>`).join('')}
+        `;
+      }
+      
+      if (bulkAssignSelect) {
+        bulkAssignSelect.innerHTML = `
+          <option value="">-- Assigner à --</option>
+          <option value="none">Laisser vide / Non assigné</option>
+          ${sellers.map(s => `<option value="${s.id}">${s.full_name}</option>`).join('')}
+        `;
+      }
+      
+      const selectBySellerCont = document.getElementById('bulk-select-by-seller-container');
+      if (selectBySellerCont) selectBySellerCont.style.display = 'inline-flex';
+      const assignCont = document.getElementById('bulk-assign-container');
+      if (assignCont) assignCont.style.display = 'inline-flex';
+      const deleteBtn = document.getElementById('bulk-delete-btn');
+      if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+    } else {
+      if (filterSelect) filterSelect.style.display = 'none';
+      const selectBySellerCont = document.getElementById('bulk-select-by-seller-container');
+      if (selectBySellerCont) selectBySellerCont.style.display = 'none';
+      const assignCont = document.getElementById('bulk-assign-container');
+      if (assignCont) assignCont.style.display = 'none';
+      const deleteBtn = document.getElementById('bulk-delete-btn');
+      if (deleteBtn) deleteBtn.style.display = 'none';
+    }
+
     let filteredClients = clients;
     if (role === 'employee' && user) {
       filteredClients = clients.filter(c => c.created_by === user.id);
     }
 
     if (filteredClients.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted);">Aucun client enregistré</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted);">Aucun client enregistré</td></tr>`;
       return;
     }
 
@@ -968,7 +1027,11 @@ const UI = (() => {
       const actLabel = actType ? (getTranslation('activity_' + actType) || c.activity_type) : '-';
 
       const tr = document.createElement('tr');
+      tr.setAttribute('data-vendeur-id', c.created_by || 'none');
       tr.innerHTML = `
+        <td style="text-align: center; vertical-align: middle;">
+          <input type="checkbox" class="client-row-checkbox" data-id="${c.id}" onchange="updateClientSelectionSummary()">
+        </td>
         <td><strong>${c.full_name}</strong></td>
         <td>${c.phone_number}</td>
         <td><span class="badge badge-info">${c.dealer_number}</span></td>

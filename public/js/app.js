@@ -2161,14 +2161,169 @@ function saveLocalSettings() {
 
 // --- Local filters helpers ---
 function filterClientsTable() {
-  const query = document.getElementById('client-search').value.toLowerCase();
+  const query = document.getElementById('client-search').value.toLowerCase().trim();
+  const filterSelect = document.getElementById('client-filter-vendeur');
+  const sellerFilter = filterSelect ? filterSelect.value : 'all';
   const trs = document.getElementById('clients-table-body').querySelectorAll('tr');
   
   trs.forEach(tr => {
+    // skip empty data tr
+    if (tr.cells.length === 1 && tr.cells[0].colSpan > 5) return;
+    
     const text = tr.textContent.toLowerCase();
-    tr.style.display = text.includes(query) ? '' : 'none';
+    const matchesQuery = text.includes(query);
+    
+    const rowSellerId = tr.getAttribute('data-vendeur-id') || 'none';
+    const matchesSeller = (sellerFilter === 'all' || rowSellerId === sellerFilter);
+    
+    if (matchesQuery && matchesSeller) {
+      tr.style.display = '';
+    } else {
+      tr.style.display = 'none';
+    }
   });
+  
+  updateClientSelectionSummary();
 }
+
+function toggleSelectAllClients(headerCheckbox) {
+  const checkboxes = document.querySelectorAll('.client-row-checkbox');
+  checkboxes.forEach(chk => {
+    const tr = chk.closest('tr');
+    if (tr && tr.style.display !== 'none') {
+      chk.checked = headerCheckbox.checked;
+    }
+  });
+  updateClientSelectionSummary();
+}
+
+function selectClientsBySeller(sellerId) {
+  if (!sellerId) return;
+  const checkboxes = document.querySelectorAll('.client-row-checkbox');
+  checkboxes.forEach(chk => {
+    const tr = chk.closest('tr');
+    if (tr && tr.style.display !== 'none') {
+      const rowSellerId = tr.getAttribute('data-vendeur-id') || 'none';
+      if (sellerId === 'none' && rowSellerId === 'none') {
+        chk.checked = true;
+      } else if (rowSellerId === sellerId) {
+        chk.checked = true;
+      } else {
+        chk.checked = false;
+      }
+    }
+  });
+  // Reset select helper dropdown
+  const select = document.getElementById('client-select-by-vendeur');
+  if (select) select.value = '';
+  updateClientSelectionSummary();
+}
+
+function updateClientSelectionSummary() {
+  const checkboxes = document.querySelectorAll('.client-row-checkbox');
+  let selectedCount = 0;
+  let visibleCount = 0;
+  let visibleCheckedCount = 0;
+  
+  checkboxes.forEach(chk => {
+    const tr = chk.closest('tr');
+    const isVisible = tr && tr.style.display !== 'none';
+    if (isVisible) {
+      visibleCount++;
+      if (chk.checked) {
+        visibleCheckedCount++;
+      }
+    }
+    if (chk.checked) {
+      selectedCount++;
+    }
+  });
+  
+  const bulkBar = document.getElementById('clients-bulk-bar');
+  const bulkCount = document.getElementById('clients-bulk-count');
+  const selectAllChk = document.getElementById('client-select-all');
+  
+  if (selectAllChk) {
+    selectAllChk.checked = visibleCount > 0 && visibleCheckedCount === visibleCount;
+    selectAllChk.indeterminate = visibleCheckedCount > 0 && visibleCheckedCount < visibleCount;
+  }
+  
+  if (selectedCount > 0) {
+    if (bulkBar) {
+      bulkBar.style.display = 'flex';
+    }
+    if (bulkCount) {
+      bulkCount.textContent = `${selectedCount} client(s) sélectionné(s)`;
+    }
+  } else {
+    if (bulkBar) {
+      bulkBar.style.display = 'none';
+    }
+  }
+}
+
+async function exportSelectedClients() {
+  const selectedIds = Array.from(document.querySelectorAll('.client-row-checkbox:checked')).map(chk => chk.getAttribute('data-id'));
+  if (selectedIds.length === 0) return;
+  
+  const clients = await DB.getClients();
+  const selectedClients = clients.filter(c => selectedIds.includes(c.id));
+  
+  const headers = ['Nom Complet', 'Téléphone', 'Numéro Dealer', 'Type Activité', 'Adresse', 'Latitude', 'Longitude', 'Notes'];
+  const rows = selectedClients.map(c => [
+    c.full_name || '',
+    c.phone_number || '',
+    c.dealer_number || '',
+    c.activity_type || '',
+    c.address || '',
+    c.latitude || '',
+    c.longitude || '',
+    c.notes || ''
+  ]);
+
+  PDF.exportToCSV(headers, rows, `Clients_Selected_Export_${Date.now()}.csv`);
+  UI.showToast(`${selectedClients.length} client(s) exporté(s).`, 'success');
+}
+
+async function bulkDeleteClients() {
+  const selectedIds = Array.from(document.querySelectorAll('.client-row-checkbox:checked')).map(chk => chk.getAttribute('data-id'));
+  if (selectedIds.length === 0) return;
+  
+  if (confirm(`Êtes-vous sûr de vouloir supprimer ces ${selectedIds.length} clients ?`)) {
+    try {
+      await DB.bulkDeleteClients(selectedIds);
+      UI.showToast(`${selectedIds.length} client(s) supprimé(s).`, 'success');
+      await UI.refreshClients();
+    } catch (err) {
+      UI.showToast(err.message, 'error');
+    }
+  }
+}
+
+async function bulkAssignClients() {
+  const selectedIds = Array.from(document.querySelectorAll('.client-row-checkbox:checked')).map(chk => chk.getAttribute('data-id'));
+  if (selectedIds.length === 0) return;
+  
+  const sellerId = document.getElementById('bulk-assign-vendeur').value;
+  if (!sellerId) {
+    UI.showToast('Veuillez sélectionner un vendeur.', 'error');
+    return;
+  }
+  
+  const sellerSelect = document.getElementById('bulk-assign-vendeur');
+  const sellerName = sellerSelect.options[sellerSelect.selectedIndex].text;
+  
+  if (confirm(`Êtes-vous sûr de vouloir assigner ces ${selectedIds.length} clients à ${sellerName} ?`)) {
+    try {
+      await DB.bulkAssignClients(selectedIds, sellerId);
+      UI.showToast(`${selectedIds.length} client(s) assigné(s) avec succès.`, 'success');
+      await UI.refreshClients();
+    } catch (err) {
+      UI.showToast(err.message, 'error');
+    }
+  }
+}
+
 
 function filterSalesTable() {
   const query = document.getElementById('sales-search').value.toLowerCase().trim();
@@ -2407,6 +2562,12 @@ window.saveLocalSettings = saveLocalSettings;
 window.clearLocalDatabase = clearLocalDatabase;
 window.filterClientsTable = filterClientsTable;
 window.filterSalesTable = filterSalesTable;
+window.toggleSelectAllClients = toggleSelectAllClients;
+window.selectClientsBySeller = selectClientsBySeller;
+window.updateClientSelectionSummary = updateClientSelectionSummary;
+window.exportSelectedClients = exportSelectedClients;
+window.bulkDeleteClients = bulkDeleteClients;
+window.bulkAssignClients = bulkAssignClients;
 window.updateReportFilters = () => UI.updateReportFilters();
 window.quickLogin = quickLogin;
 
