@@ -1607,4 +1607,16 @@ body:has(#view-auth.active) .app-container {
   border-top-color: #2563eb !important;
 }
 
+/* Locate User Position Control styling */
+.leaflet-locate-control a {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  transition: all 0.2s ease !important;
+}
+.leaflet-locate-control a:hover {
+  background-color: var(--bg-primary) !important;
+  color: var(--primary) !important;
+}
+
 

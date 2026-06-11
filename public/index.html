@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="/css/style.css?v=1.0.9">
+  <link rel="stylesheet" href="/css/style.css?v=1.0.10">
   
   <!-- CDN Dependencies -->
   <!-- Supabase -->
@@ -1724,11 +1724,38 @@
   </style>
 
   <!-- Load JS Services -->
-  <script src="/js/db.js?v=1.0.9"></script>
-  <script src="/js/auth.js?v=1.0.9"></script>
-  <script src="/js/pdf.js?v=1.0.9"></script>
-  <script src="/js/qr.js?v=1.0.9"></script>
-  <script src="/js/ui.js?v=1.0.9"></script>
-  <script src="/js/app.js?v=1.0.9"></script>
+  <script src="/js/db.js?v=1.0.10"></script>
+  <script src="/js/auth.js?v=1.0.10"></script>
+  <script src="/js/pdf.js?v=1.0.10"></script>
+  <script src="/js/qr.js?v=1.0.10"></script>
+  <script src="/js/ui.js?v=1.0.10"></script>
+  <script src="/js/app.js?v=1.0.10"></script>
+
+  <!-- Service Worker PWA Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => {
+            console.log('Service Worker registered successfully:', reg.scope);
+            
+            // Listen for service worker updates
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // A new service worker is installed and waiting
+                  console.log('New service worker version available.');
+                  if (confirm('Une nouvelle version de l\'application est disponible. Voulez-vous recharger la page pour l\'obtenir ?')) {
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          })
+          .catch(err => console.error('Service Worker registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>

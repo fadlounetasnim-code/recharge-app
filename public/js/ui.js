@@ -892,11 +892,79 @@ const UI = (() => {
               </div>
             `);
 
-            // Add user coordinates to bounds
-            bounds.push([userLat, userLng]);
+            // Add a manual location button (LocateControl) to the map
+            try {
+              const LocateControl = L.Control.extend({
+                options: { position: 'topleft' },
+                onAdd: function(mapInstance) {
+                  const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-locate-control');
+                  const button = L.DomUtil.create('a', '', container);
+                  button.href = '#';
+                  button.title = isArabic ? 'تحديد موقعي على الخريطة' : 'Centrer sur ma position';
+                  button.style.display = 'flex';
+                  button.style.alignItems = 'center';
+                  button.style.justifyContent = 'center';
+                  button.style.width = '30px';
+                  button.style.height = '30px';
+                  button.style.backgroundColor = 'var(--bg-secondary)';
+                  button.style.color = 'var(--text-primary)';
+                  button.style.border = 'none';
+                  button.style.cursor = 'pointer';
+                  button.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <line x1="12" y1="1" x2="12" y2="3"></line>
+                      <line x1="12" y1="21" x2="12" y2="23"></line>
+                      <line x1="1" y1="12" x2="3" y2="12"></line>
+                      <line x1="21" y1="12" x2="23" y2="12"></line>
+                    </svg>
+                  `;
 
-            // Recalculate zoom and center including the user position
-            setTimeout(adjustMapZoomAndBounds, 100);
+                  L.DomEvent.on(button, 'click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    L.DomEvent.preventDefault(e);
+                    mapInstance.setView([userLat, userLng], 15);
+                  });
+
+                  return container;
+                }
+              });
+              map.addControl(new LocateControl());
+            } catch (controlErr) {
+              console.warn('Leaflet: Error adding custom locate control:', controlErr);
+            }
+
+            // Check if user is too far from clients to prevent country-level zoom out
+            let shouldFitUser = false;
+            try {
+              if (bounds.length > 0) {
+                const boundsWithUser = [...bounds, [userLat, userLng]];
+                const targetZoom = map.getBoundsZoom(boundsWithUser, false, [30, 30]);
+                if (targetZoom >= 10) {
+                  shouldFitUser = true;
+                } else {
+                  console.log(`Geolocation: User position is too far (zoom level would be ${targetZoom}). Keeping map focused on clients.`);
+                }
+              } else {
+                // If there are no clients, center on the user's location
+                shouldFitUser = true;
+              }
+            } catch (zoomErr) {
+              console.warn('Geolocation: Error calculating bounds zoom:', zoomErr);
+            }
+
+            if (shouldFitUser) {
+              bounds.push([userLat, userLng]);
+              setTimeout(adjustMapZoomAndBounds, 100);
+            } else {
+              // Just invalidate size to ensure render complete
+              setTimeout(() => {
+                if (window.dashboardMapInstance) {
+                  window.dashboardMapInstance.invalidateSize();
+                }
+              }, 100);
+            }
           },
           (err) => {
             console.warn('Geolocation: Access denied or failed:', err);
