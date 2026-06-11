@@ -848,20 +848,20 @@ const UI = (() => {
       setTimeout(() => {
         try {
           if (window.dashboardMapInstance) {
+            window.dashboardMapInstance.invalidateSize();
             if (bounds.length === 1) {
               window.dashboardMapInstance.setView(bounds[0], 13);
-            } else {
+            } else if (bounds.length > 1) {
               window.dashboardMapInstance.fitBounds(bounds, { padding: [30, 30] });
               if (window.dashboardMapInstance.getZoom() > 15) {
                 window.dashboardMapInstance.setZoom(15);
               }
             }
-            window.dashboardMapInstance.invalidateSize();
           }
         } catch (fitErr) {
           console.error('Leaflet: Error fitting map bounds:', fitErr);
         }
-      }, 200);
+      }, 250);
 
     } catch (err) {
       console.error('Failed to init dashboard map:', err);
