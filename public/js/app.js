@@ -2093,6 +2093,24 @@ async function exportSalesCSV() {
   PDF.exportToCSV(headers, rows, `Sales_Export_${Date.now()}.csv`);
 }
 
+async function exportClientsCSV() {
+  const clients = await DB.getClients();
+  const headers = ['Nom Complet', 'Téléphone', 'Numéro Dealer', 'Type Activité', 'Adresse', 'Latitude', 'Longitude', 'Notes'];
+  
+  const rows = clients.map(c => [
+    c.full_name || '',
+    c.phone_number || '',
+    c.dealer_number || '',
+    c.activity_type || '',
+    c.address || '',
+    c.latitude || '',
+    c.longitude || '',
+    c.notes || ''
+  ]);
+
+  PDF.exportToCSV(headers, rows, `Clients_Export_${Date.now()}.csv`);
+}
+
 // --- Configuration View Actions ---
 function saveSettings() {
   const url = document.getElementById('setting-supabase-url').value.trim();
@@ -2383,6 +2401,7 @@ window.generateReport = generateReport;
 window.exportReportPDF = exportReportPDF;
 window.exportReportCSV = exportReportCSV;
 window.exportSalesCSV = exportSalesCSV;
+window.exportClientsCSV = exportClientsCSV;
 window.saveSettings = saveSettings;
 window.saveLocalSettings = saveLocalSettings;
 window.clearLocalDatabase = clearLocalDatabase;

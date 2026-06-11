@@ -126,9 +126,15 @@ const DB = (() => {
     if (useSupabase) {
       const { data, error } = await supabase.from('clients').insert([client]).select();
       if (!error) return data[0];
+      if (error.code === '23505') {
+        throw new Error('Ce numéro de dealer existe déjà.');
+      }
       throw error;
     }
     const clients = getLocalData('clients');
+    if (clients.some(c => c.dealer_number === client.dealer_number)) {
+      throw new Error('Ce numéro de dealer existe déjà.');
+    }
     const newClient = { ...client, id: 'client-' + Date.now(), created_at: new Date().toISOString() };
     clients.push(newClient);
     setLocalData('clients', clients);
@@ -137,17 +143,33 @@ const DB = (() => {
 
   const addClients = async (clientsList) => {
     if (useSupabase) {
-      const { data, error } = await supabase.from('clients').insert(clientsList).select();
+      const { data, error } = await supabase
+        .from('clients')
+        .upsert(clientsList, { onConflict: 'dealer_number' })
+        .select();
       if (!error) return data;
       throw error;
     }
     const clients = getLocalData('clients');
-    const newClients = clientsList.map((c, i) => ({
-      ...c,
-      id: 'client-' + (Date.now() + i),
-      created_at: new Date().toISOString()
-    }));
-    clients.push(...newClients);
+    const newClients = [];
+    clientsList.forEach((c, i) => {
+      const existingIdx = clients.findIndex(x => x.dealer_number === c.dealer_number);
+      if (existingIdx !== -1) {
+        clients[existingIdx] = {
+          ...clients[existingIdx],
+          ...c,
+          updated_at: new Date().toISOString()
+        };
+      } else {
+        const newClient = {
+          ...c,
+          id: 'client-' + (Date.now() + i),
+          created_at: new Date().toISOString()
+        };
+        clients.push(newClient);
+        newClients.push(newClient);
+      }
+    });
     setLocalData('clients', clients);
     return newClients;
   };
@@ -156,11 +178,17 @@ const DB = (() => {
     if (useSupabase) {
       const { data, error } = await supabase.from('clients').update(client).eq('id', id).select();
       if (!error) return data[0];
+      if (error.code === '23505') {
+        throw new Error('Ce numéro de dealer existe déjà.');
+      }
       throw error;
     }
     const clients = getLocalData('clients');
     const idx = clients.findIndex(c => c.id === id);
     if (idx !== -1) {
+      if (clients.some(c => c.id !== id && c.dealer_number === client.dealer_number)) {
+        throw new Error('Ce numéro de dealer existe déjà.');
+      }
       clients[idx] = { ...clients[idx], ...client, updated_at: new Date().toISOString() };
       setLocalData('clients', clients);
       return clients[idx];
@@ -544,7 +572,7 @@ const DB = (() => {
       // Local Storage Mode
       const localSales = getLocalData('sales');
       const filteredSales = localSales.filter(s => s.id !== saleId);
-      saveLocalData('sales', filteredSales);
+      setLocalData('sales', filteredSales);
 
       // Revert stock movement
       const localMovements = getLocalData('stock_movements');
@@ -562,10 +590,10 @@ const DB = (() => {
         const art = articles.find(a => a.id === mov.article_id);
         if (art) {
           art.stock_quantity = art.stock_quantity - mov.quantity; // Restore stock
-          saveLocalData('articles', articles);
+          setLocalData('articles', articles);
         }
         localMovements.splice(idx, 1);
-        saveLocalData('stock_movements', localMovements);
+        setLocalData('stock_movements', localMovements);
       }
     }
   };
