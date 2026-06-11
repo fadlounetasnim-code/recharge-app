@@ -1599,5 +1599,12 @@ body:has(#view-auth.active) .app-container {
 .leaflet-tooltip-top::before {
   border-top-color: var(--border-color) !important;
 }
+.user-position-tooltip {
+  border-color: #2563eb !important;
+  color: #2563eb !important;
+}
+.leaflet-tooltip-top.user-position-tooltip::before {
+  border-top-color: #2563eb !important;
+}
 
 

@@ -797,14 +797,11 @@ const UI = (() => {
 
       window.dashboardMapInstance = map;
 
-      if (clientsWithGPS.length === 0) {
-        return;
-      }
-
       const bounds = [];
       const isArabic = currentLanguage === 'ar';
       const primaryColor = isLightTheme ? '#831cb5' : '#c346ff';
 
+      // 1. Plot all clients with valid GPS coordinates
       clientsWithGPS.forEach(c => {
         const lat = parseFloat(c.latitude);
         const lng = parseFloat(c.longitude);
@@ -844,8 +841,8 @@ const UI = (() => {
         marker.bindPopup(popupHtml);
       });
 
-      // Fit bounds asynchronously to allow browser DOM rendering/layout computation
-      setTimeout(() => {
+      // Helper function to fit bounds or center map
+      const adjustMapZoomAndBounds = () => {
         try {
           if (window.dashboardMapInstance) {
             window.dashboardMapInstance.invalidateSize();
@@ -856,12 +853,62 @@ const UI = (() => {
               if (window.dashboardMapInstance.getZoom() > 15) {
                 window.dashboardMapInstance.setZoom(15);
               }
+            } else {
+              // Fallback default view if no coordinates are available
+              window.dashboardMapInstance.setView(defaultCenter, 11);
             }
           }
         } catch (fitErr) {
           console.error('Leaflet: Error fitting map bounds:', fitErr);
         }
-      }, 250);
+      };
+
+      // 2. Fetch user's current geolocation asynchronously
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const userLat = position.coords.latitude;
+            const userLng = position.coords.longitude;
+
+            // Place a blue marker for the user
+            const userMarker = L.circleMarker([userLat, userLng], {
+              radius: 9,
+              fillColor: '#1d4ed8',
+              color: '#ffffff',
+              weight: 3,
+              opacity: 1,
+              fillOpacity: 0.95
+            }).addTo(map);
+
+            userMarker.bindTooltip(isArabic ? 'موقعي' : 'Ma position', {
+              permanent: false,
+              direction: 'top',
+              className: 'map-tooltip user-position-tooltip'
+            });
+
+            userMarker.bindPopup(`
+              <div style="font-family: ${isArabic ? 'Cairo, sans-serif' : 'Inter, sans-serif'}; color: var(--text-primary); padding: 4px; font-size: 0.85rem; text-align: center;">
+                <strong>${isArabic ? 'موقعك الحالي' : 'Votre position actuelle'}</strong>
+              </div>
+            `);
+
+            // Add user coordinates to bounds
+            bounds.push([userLat, userLng]);
+
+            // Recalculate zoom and center including the user position
+            setTimeout(adjustMapZoomAndBounds, 100);
+          },
+          (err) => {
+            console.warn('Geolocation: Access denied or failed:', err);
+            // Just adjust map to show whatever clients we have
+            setTimeout(adjustMapZoomAndBounds, 100);
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      } else {
+        // No geolocation support in browser, fit map to client pins
+        setTimeout(adjustMapZoomAndBounds, 100);
+      }
 
     } catch (err) {
       console.error('Failed to init dashboard map:', err);
