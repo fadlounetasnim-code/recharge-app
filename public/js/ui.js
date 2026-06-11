@@ -436,6 +436,11 @@ const UI = (() => {
     // Lazy load dashboards/metrics
     if (viewId === 'dashboard') {
       initDashboard();
+      setTimeout(() => {
+        if (window.dashboardMapInstance) {
+          window.dashboardMapInstance.invalidateSize();
+        }
+      }, 150);
     } else if (viewId === 'clients') {
       refreshClients();
     } else if (viewId === 'sales') {
@@ -744,11 +749,112 @@ const UI = (() => {
       // Draw Daily Sales Chart
       drawSalesChart(filteredSales);
 
-
+      // Draw Client Map
+      await initDashboardMap();
 
     } catch (e) {
       console.error('Failed to load dashboard:', e);
     }
+  };
+
+  const initDashboardMap = async () => {
+    const mapDiv = document.getElementById('dashboard-map');
+    if (!mapDiv) return;
+
+    try {
+      const clients = await DB.getClients();
+      const role = Auth.getUserRole();
+      const user = Auth.getUserProfile();
+      let filteredClients = clients;
+      if (role === 'employee' && user) {
+        filteredClients = clients.filter(c => c.created_by === user.id);
+      }
+      
+      const clientsWithGPS = filteredClients.filter(c => c.latitude && c.longitude);
+
+      if (window.dashboardMapInstance) {
+        window.dashboardMapInstance.remove();
+        window.dashboardMapInstance = null;
+      }
+
+      const isLightTheme = document.body.classList.contains('light-theme');
+      const tilesUrl = isLightTheme 
+        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+      if (clientsWithGPS.length === 0) {
+        const defaultCenter = [35.17, -2.93]; // Nador region
+        const map = L.map('dashboard-map').setView(defaultCenter, 11);
+        L.tileLayer(tilesUrl, {
+          attribution: '&copy; OpenStreetMap &copy; CARTO'
+        }).addTo(map);
+        window.dashboardMapInstance = map;
+        return;
+      }
+
+      const bounds = [];
+      clientsWithGPS.forEach(c => {
+        bounds.push([parseFloat(c.latitude), parseFloat(c.longitude)]);
+      });
+
+      const map = L.map('dashboard-map');
+      L.tileLayer(tilesUrl, {
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+      }).addTo(map);
+
+      map.fitBounds(bounds, { padding: [30, 30] });
+      if (map.getZoom() > 15) {
+        map.setZoom(15);
+      }
+
+      const isArabic = currentLanguage === 'ar';
+      const primaryColor = isLightTheme ? '#831cb5' : '#c346ff';
+
+      clientsWithGPS.forEach(c => {
+        const actType = c.activity_type ? c.activity_type.toLowerCase() : '';
+        const actLabel = actType ? (getTranslation('activity_' + actType) || c.activity_type) : '-';
+        
+        const popupHtml = `
+          <div style="font-family: ${isArabic ? 'Cairo, sans-serif' : 'Inter, sans-serif'}; color: var(--text-primary); padding: 4px; font-size: 0.85rem; min-width: 180px;">
+            <strong style="font-size: 0.95rem; display: block; margin-bottom: 6px; color: var(--primary);">${c.full_name}</strong>
+            <div style="margin-bottom: 4px;"><strong>${isArabic ? 'الهاتف:' : 'Tél:'}</strong> ${c.phone_number || '-'}</div>
+            <div style="margin-bottom: 4px;"><strong>${isArabic ? 'رقم التاجر:' : 'Dealer:'}</strong> <span class="badge badge-info" style="font-size:0.7rem; padding: 2px 6px;">${c.dealer_number}</span></div>
+            <div style="margin-bottom: 8px;"><strong>${isArabic ? 'النشاط:' : 'Activité:'}</strong> ${actLabel}</div>
+            <a href="https://www.google.com/maps?q=${c.latitude},${c.longitude}" target="_blank" class="btn btn-primary btn-sm" style="display: flex; width: 100%; color: #fff !important; text-decoration: none; justify-content: center; align-items: center; gap: 4px; padding: 6px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; background-color: var(--primary);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px;"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+              ${isArabic ? 'الاتجاهات (Google Maps)' : 'Itinéraire (Google Maps)'}
+            </a>
+          </div>
+        `;
+
+        const marker = L.circleMarker([parseFloat(c.latitude), parseFloat(c.longitude)], {
+          radius: 9,
+          fillColor: primaryColor,
+          color: '#ffffff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(map);
+
+        marker.bindTooltip(c.full_name, {
+          permanent: false,
+          direction: 'top',
+          className: 'map-tooltip'
+        });
+
+        marker.bindPopup(popupHtml);
+      });
+
+      window.dashboardMapInstance = map;
+    } catch (err) {
+      console.error('Failed to init dashboard map:', err);
+    }
+
+    setTimeout(() => {
+      if (window.dashboardMapInstance) {
+        window.dashboardMapInstance.invalidateSize();
+      }
+    }, 100);
   };
 
   // Draw chart of daily profits/remises
