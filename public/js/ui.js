@@ -775,7 +775,7 @@ const UI = (() => {
         if (!c.latitude || !c.longitude) return false;
         const lat = parseFloat(c.latitude);
         const lng = parseFloat(c.longitude);
-        return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+        return !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && lat !== 0 && lng !== 0;
       });
 
       if (window.dashboardMapInstance) {
@@ -849,10 +849,7 @@ const UI = (() => {
             if (bounds.length === 1) {
               window.dashboardMapInstance.setView(bounds[0], 13);
             } else if (bounds.length > 1) {
-              window.dashboardMapInstance.fitBounds(bounds, { padding: [30, 30] });
-              if (window.dashboardMapInstance.getZoom() > 15) {
-                window.dashboardMapInstance.setZoom(15);
-              }
+              window.dashboardMapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
             } else {
               // Fallback default view if no coordinates are available
               window.dashboardMapInstance.setView(defaultCenter, 11);
@@ -862,6 +859,9 @@ const UI = (() => {
           console.error('Leaflet: Error fitting map bounds:', fitErr);
         }
       };
+
+      // Fit map to client pins immediately at start
+      setTimeout(adjustMapZoomAndBounds, 100);
 
       // 2. Fetch user's current geolocation asynchronously
       if (navigator.geolocation) {
@@ -900,14 +900,10 @@ const UI = (() => {
           },
           (err) => {
             console.warn('Geolocation: Access denied or failed:', err);
-            // Just adjust map to show whatever clients we have
-            setTimeout(adjustMapZoomAndBounds, 100);
+            // Geolocation failed, but map is already fitted to client bounds from step 1, so do nothing.
           },
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
-      } else {
-        // No geolocation support in browser, fit map to client pins
-        setTimeout(adjustMapZoomAndBounds, 100);
       }
 
     } catch (err) {
