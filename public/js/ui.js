@@ -770,7 +770,13 @@ const UI = (() => {
         filteredClients = clients.filter(c => c.created_by === user.id);
       }
       
-      const clientsWithGPS = filteredClients.filter(c => c.latitude && c.longitude);
+      // Filter strictly valid latitude and longitude
+      const clientsWithGPS = filteredClients.filter(c => {
+        if (!c.latitude || !c.longitude) return false;
+        const lat = parseFloat(c.latitude);
+        const lng = parseFloat(c.longitude);
+        return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+      });
 
       if (window.dashboardMapInstance) {
         window.dashboardMapInstance.remove();
@@ -782,35 +788,28 @@ const UI = (() => {
         ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
         : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
-      if (clientsWithGPS.length === 0) {
-        const defaultCenter = [35.17, -2.93]; // Nador region
-        const map = L.map('dashboard-map').setView(defaultCenter, 11);
-        L.tileLayer(tilesUrl, {
-          attribution: '&copy; OpenStreetMap &copy; CARTO'
-        }).addTo(map);
-        window.dashboardMapInstance = map;
-        return;
-      }
-
-      const bounds = [];
-      clientsWithGPS.forEach(c => {
-        bounds.push([parseFloat(c.latitude), parseFloat(c.longitude)]);
-      });
-
-      const map = L.map('dashboard-map');
+      // Always initialize with a default center to prevent Leaflet layout collapse
+      const defaultCenter = [35.17, -2.93]; // Nador region
+      const map = L.map('dashboard-map').setView(defaultCenter, 11);
       L.tileLayer(tilesUrl, {
         attribution: '&copy; OpenStreetMap &copy; CARTO'
       }).addTo(map);
 
-      map.fitBounds(bounds, { padding: [30, 30] });
-      if (map.getZoom() > 15) {
-        map.setZoom(15);
+      window.dashboardMapInstance = map;
+
+      if (clientsWithGPS.length === 0) {
+        return;
       }
 
+      const bounds = [];
       const isArabic = currentLanguage === 'ar';
       const primaryColor = isLightTheme ? '#831cb5' : '#c346ff';
 
       clientsWithGPS.forEach(c => {
+        const lat = parseFloat(c.latitude);
+        const lng = parseFloat(c.longitude);
+        bounds.push([lat, lng]);
+
         const actType = c.activity_type ? c.activity_type.toLowerCase() : '';
         const actLabel = actType ? (getTranslation('activity_' + actType) || c.activity_type) : '-';
         
@@ -820,14 +819,14 @@ const UI = (() => {
             <div style="margin-bottom: 4px;"><strong>${isArabic ? 'الهاتف:' : 'Tél:'}</strong> ${c.phone_number || '-'}</div>
             <div style="margin-bottom: 4px;"><strong>${isArabic ? 'رقم التاجر:' : 'Dealer:'}</strong> <span class="badge badge-info" style="font-size:0.7rem; padding: 2px 6px;">${c.dealer_number}</span></div>
             <div style="margin-bottom: 8px;"><strong>${isArabic ? 'النشاط:' : 'Activité:'}</strong> ${actLabel}</div>
-            <a href="https://www.google.com/maps?q=${c.latitude},${c.longitude}" target="_blank" class="btn btn-primary btn-sm" style="display: flex; width: 100%; color: #fff !important; text-decoration: none; justify-content: center; align-items: center; gap: 4px; padding: 6px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; background-color: var(--primary);">
+            <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" class="btn btn-primary btn-sm" style="display: flex; width: 100%; color: #fff !important; text-decoration: none; justify-content: center; align-items: center; gap: 4px; padding: 6px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; background-color: var(--primary);">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px;"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
               ${isArabic ? 'الاتجاهات (Google Maps)' : 'Itinéraire (Google Maps)'}
             </a>
           </div>
         `;
 
-        const marker = L.circleMarker([parseFloat(c.latitude), parseFloat(c.longitude)], {
+        const marker = L.circleMarker([lat, lng], {
           radius: 9,
           fillColor: primaryColor,
           color: '#ffffff',
@@ -845,16 +844,28 @@ const UI = (() => {
         marker.bindPopup(popupHtml);
       });
 
-      window.dashboardMapInstance = map;
+      // Fit bounds asynchronously to allow browser DOM rendering/layout computation
+      setTimeout(() => {
+        try {
+          if (window.dashboardMapInstance) {
+            if (bounds.length === 1) {
+              window.dashboardMapInstance.setView(bounds[0], 13);
+            } else {
+              window.dashboardMapInstance.fitBounds(bounds, { padding: [30, 30] });
+              if (window.dashboardMapInstance.getZoom() > 15) {
+                window.dashboardMapInstance.setZoom(15);
+              }
+            }
+            window.dashboardMapInstance.invalidateSize();
+          }
+        } catch (fitErr) {
+          console.error('Leaflet: Error fitting map bounds:', fitErr);
+        }
+      }, 200);
+
     } catch (err) {
       console.error('Failed to init dashboard map:', err);
     }
-
-    setTimeout(() => {
-      if (window.dashboardMapInstance) {
-        window.dashboardMapInstance.invalidateSize();
-      }
-    }, 100);
   };
 
   // Draw chart of daily profits/remises
