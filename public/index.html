@@ -129,6 +129,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           <span data-i18n="nav_credits">Crédits Clients</span>
         </a>
+        <a href="#" class="nav-item" data-nav="frais">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+          <span data-i18n="nav_frais">Frais / Caisse</span>
+        </a>
         <a href="#" class="nav-item" data-nav="stock">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
           <span data-i18n="nav_stock">Stock / Articles</span>
@@ -486,6 +490,37 @@
             <p data-i18n="credits_subtitle" style="color: var(--text-secondary);">Suivi et règlements des ventes à crédit</p>
           </div>
         </div>
+        
+        <!-- Credits KPI Cards Row -->
+        <div class="metrics-grid" style="margin-bottom: 24px;">
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-indigo-light text-indigo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="lbl_total_credits_gross">Total Ventes Crédit</h3>
+              <div id="kpi-credits-gross" class="metric-value">0.00 DH</div>
+            </div>
+          </div>
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-success-light text-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="lbl_total_credits_paid">Total Règlements</h3>
+              <div id="kpi-credits-paid" class="metric-value">0.00 DH</div>
+            </div>
+          </div>
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-amber-light text-amber">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="lbl_total_credits_reste">Crédit Restant (Dette)</h3>
+              <div id="kpi-credits-reste" class="metric-value" style="color: var(--crimson);">0.00 DH</div>
+            </div>
+          </div>
+        </div>
 
         <div class="glass-panel">
           <div class="filter-panel" style="margin-bottom: 20px; display:flex; gap:16px;">
@@ -801,6 +836,93 @@
             <input type="password" id="setting-confirm-password" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="••••••">
           </div>
           <button class="btn btn-primary" onclick="changeUserPassword()" data-i18n="btn_change_password">Modifier le mot de passe</button>
+        </div>
+      </section>
+
+      <!-- EXPENSES VIEW -->
+      <section id="view-frais" class="view" style="display:none;">
+        <div class="view-header">
+          <div>
+            <h1 data-i18n="nav_frais">Gestion des Frais & Caisse</h1>
+            <p data-i18n="frais_subtitle" style="color: var(--text-secondary);">Suivi en temps réel des entrées et dépenses de caisse</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn btn-danger" onclick="openFraisModal()" style="background-color: var(--crimson); border-color: var(--crimson); font-weight:700; display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span data-i18n="btn_new_frais">Nouvelle Opération</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Frais KPI Cards Row -->
+        <div class="metrics-grid" style="margin-bottom: 24px;">
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-success-light text-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="lbl_total_frais_in">Approvisionnement (Entrées)</h3>
+              <div id="kpi-frais-in" class="metric-value">0.00 DH</div>
+            </div>
+          </div>
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-crimson-light text-crimson">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="lbl_total_frais_out">Dépenses (Sorties)</h3>
+              <div id="kpi-frais-out" class="metric-value" style="color: var(--crimson);">0.00 DH</div>
+            </div>
+          </div>
+          <div class="metric-card glass-panel">
+            <div class="metric-icon bg-indigo-light text-indigo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <div class="metric-info">
+              <h3 data-i18n="lbl_frais_balance">Solde Caisse</h3>
+              <div id="kpi-frais-balance" class="metric-value" style="color: var(--primary);">0.00 DH</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-panel">
+          <div class="filter-panel" style="margin-bottom: 20px; display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+            <input type="text" id="frais-search" class="btn-outline" style="padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" placeholder="Rechercher..." oninput="UI.refreshFrais()">
+            
+            <select id="frais-filter-type" class="btn-outline" style="padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="UI.refreshFrais()">
+              <option value="all" data-i18n="opt_all_types">Tous les types</option>
+              <option value="in" data-i18n="opt_type_in">Entrées (Caisse)</option>
+              <option value="out" data-i18n="opt_type_out">Sorties (Dépenses)</option>
+            </select>
+
+            <select id="frais-filter-category" class="btn-outline" style="padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" onchange="UI.refreshFrais()">
+              <option value="all" data-i18n="opt_all_frais_categories">Toutes les catégories</option>
+              <option value="caisse_in" data-i18n="opt_cat_caisse_in">Approvisionnement Caisse</option>
+              <option value="gasoil" data-i18n="opt_cat_gasoil">Gasoil</option>
+              <option value="adblue" data-i18n="opt_cat_adblue">AdBlue</option>
+              <option value="masarif_chakhsiya" data-i18n="opt_cat_masarif_chakhsiya">Masarif Chakhsiya</option>
+              <option value="divers" data-i18n="opt_cat_divers">Divers</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th data-i18n="th_date">Date</th>
+                  <th class="hide-employee-col" data-i18n="th_vendeur">Collaborateur</th>
+                  <th data-i18n="th_type">Type</th>
+                  <th data-i18n="th_category">Catégorie</th>
+                  <th data-i18n="th_net_total">Montant</th>
+                  <th data-i18n="th_notes">Notes / Réf</th>
+                  <th data-i18n="th_actions" class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="frais-table-body">
+                <!-- JS dynamically populated -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
       
@@ -1486,6 +1608,59 @@
     </div>
   </div>
 
+  <!-- FRAIS / EXPENSE TRANSACTION MODAL -->
+  <div id="frais-modal" class="modal" style="display:none;">
+    <div class="modal-content glass-panel" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 id="frais-modal-title" data-i18n="modal_new_frais_title">Nouvelle Opération</h3>
+        <button class="close-modal-btn" onclick="closeActiveModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:16px;">
+        <form id="frais-form">
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_amount">Montant (DH) *</label>
+            <input type="number" id="frais-amount" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary);" required min="0.01" step="0.01" placeholder="0.00">
+          </div>
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_payment_method">Type de transaction *</label>
+            <select id="frais-type" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required onchange="UI.updateFraisCategoryOptions(this.value)">
+              <option value="out" data-i18n="opt_type_out">Dépense (Sortie)</option>
+              <option value="in" data-i18n="opt_type_in">Approvisionnement (Entrée)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_category">Catégorie *</label>
+            <select id="frais-category" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);" required>
+              <option value="gasoil" data-i18n="opt_cat_gasoil">Gasoil</option>
+              <option value="adblue" data-i18n="opt_cat_adblue">AdBlue</option>
+              <option value="masarif_chakhsiya" data-i18n="opt_cat_masarif_chakhsiya">Masarif Chakhsiya</option>
+              <option value="divers" data-i18n="opt_cat_divers">Divers</option>
+            </select>
+          </div>
+
+          <div class="form-group hide-employee-col" style="margin-bottom:16px;">
+            <label class="label" data-i18n="lbl_vendeur_destinataire">Collaborateur / Vendeur *</label>
+            <select id="frais-employee-id" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);">
+              <!-- populated dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:20px;">
+            <label class="label" data-i18n="th_notes">Description / Notes</label>
+            <textarea id="frais-description" class="btn-outline" style="width:100%; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-primary); color:var(--text-primary); min-height: 80px;" placeholder="Ex: Achat carburant Maarif, alimentation..."></textarea>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:12px;">
+            <button type="button" class="btn btn-outline" onclick="closeActiveModal()" data-i18n="btn_cancel">Annuler</button>
+            <button type="submit" class="btn btn-primary" data-i18n="btn_save">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- PAYMENT PHOTO VIEWER MODAL -->
   <div id="payment-photo-modal" class="modal" style="display:none; z-index: 10001;">
     <div class="modal-content glass-panel" style="max-width: 600px; text-align: center;">
@@ -1675,6 +1850,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span data-i18n="nav_settings">Configuration</span>
         </a>
+        <a href="#" class="more-menu-item" data-nav="frais" onclick="closeMobileMoreSheet()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+          <span data-i18n="nav_frais">Frais / Caisse</span>
+        </a>
       </div>
     </div>
   </div>
@@ -1723,12 +1902,12 @@
   </style>
 
   <!-- Load JS Services -->
-  <script src="/js/db.js?v=1.0.14"></script>
-  <script src="/js/auth.js?v=1.0.14"></script>
-  <script src="/js/pdf.js?v=1.0.14"></script>
-  <script src="/js/qr.js?v=1.0.14"></script>
-  <script src="/js/ui.js?v=1.0.14"></script>
-  <script src="/js/app.js?v=1.0.14"></script>
+  <script src="/js/db.js?v=1.0.15"></script>
+  <script src="/js/auth.js?v=1.0.15"></script>
+  <script src="/js/pdf.js?v=1.0.15"></script>
+  <script src="/js/qr.js?v=1.0.15"></script>
+  <script src="/js/ui.js?v=1.0.15"></script>
+  <script src="/js/app.js?v=1.0.15"></script>
 
   <!-- Service Worker PWA Registration -->
   <script>

@@ -49,6 +49,28 @@ const UI = (() => {
       nav_credits: "Crédits Clients",
       credits_subtitle: "Suivi et règlements des ventes à crédit",
       opt_all_credits: "Tous les crédits",
+      nav_frais: "Frais / Caisse",
+      frais_subtitle: "Suivi en temps réel des entrées et dépenses de caisse",
+      btn_new_frais: "Nouvelle Opération",
+      lbl_total_frais_in: "Approvisionnement (Entrées)",
+      lbl_total_frais_out: "Dépenses (Sorties)",
+      lbl_frais_balance: "Solde Caisse",
+      opt_all_types: "Tous les types",
+      opt_type_in: "Entrées (Caisse)",
+      opt_type_out: "Sorties (Dépenses)",
+      opt_all_frais_categories: "Toutes les catégories",
+      opt_cat_caisse_in: "Approvisionnement Caisse",
+      opt_cat_gasoil: "Gasoil",
+      opt_cat_adblue: "AdBlue",
+      opt_cat_masarif_chakhsiya: "Masarif Chakhsiya",
+      opt_cat_divers: "Divers",
+      modal_new_frais_title: "Nouvelle Opération",
+      lbl_amount: "Montant (DH)",
+      lbl_category: "Catégorie",
+      th_category: "Catégorie",
+      lbl_total_credits_gross: "Total Ventes Crédit",
+      lbl_total_credits_paid: "Total Règlements",
+      lbl_total_credits_reste: "Crédit Restant (Dette)",
       modal_credit_payment_title: "Enregistrer un Règlement Client",
       lbl_payment_method: "Mode de règlement",
       payment_method_cash: "Espèces",
@@ -251,6 +273,28 @@ const UI = (() => {
       nav_credits: "ديون العملاء",
       credits_subtitle: "متابعة وتسوية المبيعات بالكريدي",
       opt_all_credits: "جميع الديون",
+      nav_frais: "المصاريف والصندوق",
+      frais_subtitle: "متابعة مباشرة لمدخلات ومصاريف الصندوق",
+      btn_new_frais: "عملية جديدة",
+      lbl_total_frais_in: "شحن الصندوق (المدخلات)",
+      lbl_total_frais_out: "المصاريف (المخرجات)",
+      lbl_frais_balance: "رصيد الصندوق",
+      opt_all_types: "كل الأنواع",
+      opt_type_in: "المدخلات (شحن)",
+      opt_type_out: "المخرجات (مصاريف)",
+      opt_all_frais_categories: "كل الفئات",
+      opt_cat_caisse_in: "شحن الصندوق",
+      opt_cat_gasoil: "المازوت",
+      opt_cat_adblue: "أدبلو",
+      opt_cat_masarif_chakhsiya: "مصاريف شخصية",
+      opt_cat_divers: "متنوع",
+      modal_new_frais_title: "عملية صندوق جديدة",
+      lbl_amount: "المبلغ (درهم)",
+      lbl_category: "الفئة",
+      th_category: "الفئة",
+      lbl_total_credits_gross: "إجمالي مبيعات الكريدي",
+      lbl_total_credits_paid: "إجمالي التسديدات",
+      lbl_total_credits_reste: "الكريدي المتبقي (الدين)",
       modal_credit_payment_title: "تسجيل دفعة زبون",
       lbl_payment_method: "طريقة الدفع",
       payment_method_cash: "نقداً",
@@ -453,6 +497,8 @@ const UI = (() => {
       updateReportFilters();
     } else if (viewId === 'credits') {
       refreshCredits();
+    } else if (viewId === 'frais') {
+      refreshFrais();
     }
   };
 
@@ -1773,6 +1819,33 @@ const UI = (() => {
       filteredSales = filteredSales.filter(s => s.employee_id === user.id);
     }
 
+    // Calculate total credit KPIs based on role-filtered credits
+    let kpiGross = 0;
+    let kpiPaid = 0;
+    let kpiReste = 0;
+
+    filteredSales.forEach(sale => {
+      const payments = parseClientPayments(sale.notes);
+      let totalPaid = 0;
+      if (sale.payment_status === 'paid') {
+        totalPaid = Number(sale.net_total) || 0;
+      } else {
+        totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      }
+      const balance = Math.max(0, (Number(sale.net_total) || 0) - totalPaid);
+
+      kpiGross += Number(sale.net_total) || 0;
+      kpiPaid += totalPaid;
+      kpiReste += balance;
+    });
+
+    const grossEl = document.getElementById('kpi-credits-gross');
+    const paidEl = document.getElementById('kpi-credits-paid');
+    const resteEl = document.getElementById('kpi-credits-reste');
+    if (grossEl) grossEl.textContent = kpiGross.toFixed(2) + ' DH';
+    if (paidEl) paidEl.textContent = kpiPaid.toFixed(2) + ' DH';
+    if (resteEl) resteEl.textContent = kpiReste.toFixed(2) + ' DH';
+
     if (searchQuery) {
       filteredSales = filteredSales.filter(s => {
         const clientName = s.clients?.full_name?.toLowerCase() || '';
@@ -1827,8 +1900,158 @@ const UI = (() => {
     });
   };
 
+  const refreshFrais = async () => {
+    const role = Auth.getUserRole();
+    const user = Auth.getUserProfile();
+    const isArabic = currentLanguage === 'ar';
+
+    // Show/hide Collaborateur column based on employee role
+    const employeeCols = document.querySelectorAll('.hide-employee-col');
+    employeeCols.forEach(el => {
+      if (role === 'employee') {
+        el.style.display = 'none';
+      } else {
+        el.style.display = '';
+      }
+    });
+
+    const records = await DB.getFrais();
+    let userRecords = records;
+    if (role === 'employee' && user) {
+      userRecords = records.filter(r => r.employee_id === user.id);
+    }
+
+    // Calculate total KPIs from role-filtered records
+    let totalIn = 0;
+    let totalOut = 0;
+    userRecords.forEach(r => {
+      const amt = Number(r.amount) || 0;
+      if (r.type === 'in') {
+        totalIn += amt;
+      } else if (r.type === 'out') {
+        totalOut += amt;
+      }
+    });
+    const balance = totalIn - totalOut;
+
+    const kpiInEl = document.getElementById('kpi-frais-in');
+    const kpiOutEl = document.getElementById('kpi-frais-out');
+    const kpiBalEl = document.getElementById('kpi-frais-balance');
+
+    if (kpiInEl) kpiInEl.textContent = totalIn.toFixed(2) + ' DH';
+    if (kpiOutEl) kpiOutEl.textContent = totalOut.toFixed(2) + ' DH';
+    if (kpiBalEl) kpiBalEl.textContent = balance.toFixed(2) + ' DH';
+
+    // Filter displayed records by search query, type filter, category filter
+    const searchQuery = document.getElementById('frais-search')?.value.trim().toLowerCase() || '';
+    const filterType = document.getElementById('frais-filter-type')?.value || 'all';
+    const filterCategory = document.getElementById('frais-filter-category')?.value || 'all';
+
+    let displayedRecords = userRecords;
+    if (filterType !== 'all') {
+      displayedRecords = displayedRecords.filter(r => r.type === filterType);
+    }
+    if (filterCategory !== 'all') {
+      displayedRecords = displayedRecords.filter(r => r.category === filterCategory);
+    }
+    if (searchQuery) {
+      displayedRecords = displayedRecords.filter(r => {
+        const desc = r.description?.toLowerCase() || '';
+        const cat = r.category?.toLowerCase() || '';
+        const collab = r.team_members?.full_name?.toLowerCase() || '';
+        return desc.includes(searchQuery) || cat.includes(searchQuery) || collab.includes(searchQuery);
+      });
+    }
+
+    const tbody = document.getElementById('frais-table-body');
+    if (tbody) {
+      tbody.innerHTML = '';
+      if (displayedRecords.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${role === 'employee' ? '6' : '7'}" style="text-align:center; color:var(--text-muted);">${getTranslation('msg_no_report_data')}</td></tr>`;
+        return;
+      }
+
+      displayedRecords.forEach(r => {
+        const tr = document.createElement('tr');
+        const typeText = r.type === 'in' ? getTranslation('opt_type_in') : getTranslation('opt_type_out');
+        const typeBadgeClass = r.type === 'in' ? 'badge-success' : 'badge-crimson';
+        const categoryText = getTranslation('opt_cat_' + r.category) || r.category;
+        
+        const employeeCell = role === 'employee' ? '' : `<td>${r.team_members?.full_name || 'Inconnu'}</td>`;
+        
+        // Delete action: admin/supervisor can delete, employee can delete their own
+        const canDelete = role === 'admin' || role === 'supervisor' || (role === 'employee' && user && r.employee_id === user.id);
+        const actionsHtml = canDelete ? `
+          <td class="text-right">
+            <button class="btn btn-outline btn-sm text-danger" onclick="UI.deleteFraisRecord('${r.id}')" title="Supprimer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>
+          </td>
+        ` : `<td class="text-right">-</td>`;
+
+        tr.innerHTML = `
+          <td>${new Date(r.created_at).toLocaleDateString()}</td>
+          ${employeeCell}
+          <td><span class="badge ${typeBadgeClass}">${typeText}</span></td>
+          <td><strong>${categoryText}</strong></td>
+          <td style="font-weight:600; color: ${r.type === 'in' ? 'var(--success)' : 'var(--crimson)'};">
+            ${r.type === 'in' ? '+' : '-'}${Number(r.amount).toFixed(2)} DH
+          </td>
+          <td><span style="font-size:0.9rem;">${r.description || ''}</span></td>
+          ${actionsHtml}
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  };
+
+  const updateFraisCategoryOptions = (type) => {
+    const categorySelect = document.getElementById('frais-category');
+    if (!categorySelect) return;
+
+    categorySelect.innerHTML = '';
+
+    if (type === 'in') {
+      const opt = document.createElement('option');
+      opt.value = 'caisse_in';
+      opt.setAttribute('data-i18n', 'opt_cat_caisse_in');
+      opt.textContent = getTranslation('opt_cat_caisse_in') || 'Approvisionnement Caisse';
+      categorySelect.appendChild(opt);
+    } else {
+      const categories = [
+        { value: 'gasoil', key: 'opt_cat_gasoil', fallback: 'Gasoil' },
+        { value: 'adblue', key: 'opt_cat_adblue', fallback: 'AdBlue' },
+        { value: 'masarif_chakhsiya', key: 'opt_cat_masarif_chakhsiya', fallback: 'Masarif Chakhsiya' },
+        { value: 'divers', key: 'opt_cat_divers', fallback: 'Divers' }
+      ];
+
+      categories.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat.value;
+        opt.setAttribute('data-i18n', cat.key);
+        opt.textContent = getTranslation(cat.key) || cat.fallback;
+        categorySelect.appendChild(opt);
+      });
+    }
+  };
+
+  const deleteFraisRecord = async (id) => {
+    if (confirm(getTranslation('msg_confirm_delete'))) {
+      try {
+        await DB.deleteFrais(id);
+        showToast(getTranslation('msg_delete_success'), 'success');
+        refreshFrais();
+      } catch (err) {
+        showToast('Erreur : ' + (err.message || err), 'error');
+      }
+    }
+  };
+
   return {
     showView,
+    refreshFrais,
+    updateFraisCategoryOptions,
+    deleteFraisRecord,
     translatePage,
     getTranslation,
     switchLanguage,

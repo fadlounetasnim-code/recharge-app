@@ -131,6 +131,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     stockTransferForm.addEventListener('submit', handleStockTransferSubmit);
   }
 
+  // 7f. Frais form submit listener
+  const fraisForm = document.getElementById('frais-form');
+  if (fraisForm) {
+    fraisForm.addEventListener('submit', handleFraisSubmit);
+  }
+
   // Credit Payment form submit listener
   const creditPaymentForm = document.getElementById('credit-payment-form');
   if (creditPaymentForm) {
@@ -2517,6 +2523,8 @@ function closeActiveModal() {
   if (qrScannerModal && qrScannerModal.style.display !== 'none') closeQRScanner();
   const clientQrModal = document.getElementById('client-qr-modal');
   if (clientQrModal) clientQrModal.style.display = 'none';
+  const fraisModal = document.getElementById('frais-modal');
+  if (fraisModal) fraisModal.style.display = 'none';
 }
 
 window.openClientModal = openClientModal;
@@ -3208,3 +3216,87 @@ async function deleteSupplierPayment(paymentId, invoiceNumber) {
 }
 
 window.deleteSupplierPayment = deleteSupplierPayment;
+
+// --- FRAIS (EXPENSES / CASH FLOW) CONTROLLERS ---
+async function openFraisModal() {
+  const form = document.getElementById('frais-form');
+  if (form) form.reset();
+
+  const employeeSelect = document.getElementById('frais-employee-id');
+  if (employeeSelect) {
+    employeeSelect.innerHTML = '<option value="">-- Choisir Collaborateur --</option>';
+    const team = await DB.getTeamMembers();
+    team.filter(t => t.is_active).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.full_name;
+      employeeSelect.appendChild(opt);
+    });
+
+    const user = Auth.getUserProfile();
+    const role = Auth.getUserRole();
+    if (role === 'employee' && user) {
+      employeeSelect.value = user.id;
+    }
+  }
+
+  // Set default categories options for type 'out' (which is selected by default)
+  UI.updateFraisCategoryOptions('out');
+
+  document.getElementById('modal-overlay').style.display = 'block';
+  document.getElementById('frais-modal').style.display = 'block';
+}
+
+async function handleFraisSubmit(e) {
+  e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+  }
+  const loader = document.getElementById('loading-overlay');
+  if (loader) loader.style.display = 'flex';
+
+  const amount = parseFloat(document.getElementById('frais-amount').value) || 0;
+  const type = document.getElementById('frais-type').value;
+  const category = document.getElementById('frais-category').value;
+  const employeeIdSelect = document.getElementById('frais-employee-id');
+  const description = document.getElementById('frais-description').value;
+
+  const user = Auth.getUserProfile();
+  const role = Auth.getUserRole();
+
+  let employeeId = null;
+  if (role === 'employee') {
+    employeeId = user.id;
+  } else {
+    employeeId = employeeIdSelect.value || user.id;
+  }
+
+  const record = {
+    type,
+    category,
+    amount,
+    description,
+    employee_id: employeeId,
+    created_at: new Date().toISOString()
+  };
+
+  try {
+    await DB.addFrais(record);
+    UI.showToast(UI.getTranslation('msg_save_success'), 'success');
+    closeActiveModal();
+    UI.refreshFrais();
+  } catch (err) {
+    UI.showToast(err.message || 'Erreur', 'error');
+  } finally {
+    if (loader) loader.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = '1';
+    }
+  }
+}
+
+window.openFraisModal = openFraisModal;
+window.handleFraisSubmit = handleFraisSubmit;

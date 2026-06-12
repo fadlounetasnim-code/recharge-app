@@ -1242,6 +1242,113 @@ const DB = (() => {
     }
   };
 
+  const getLocalFraisWithTeam = () => {
+    const frais = getLocalData('frais');
+    const team = getLocalData('team_members');
+    return frais.map(f => {
+      const member = team.find(t => t.id === f.employee_id);
+      return {
+        ...f,
+        team_members: member ? { full_name: member.full_name } : null
+      };
+    }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  };
+
+  const getFrais = async () => {
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase
+          .from('frais')
+          .select('*, team_members(full_name)')
+          .order('created_at', { ascending: false });
+        if (error) {
+          if (error.code === '42P01') {
+            console.warn('Supabase "frais" table not found. Using local storage.');
+            return getLocalFraisWithTeam();
+          }
+          throw error;
+        }
+        return data;
+      } catch (err) {
+        console.error('Failed to fetch from Supabase table "frais":', err);
+        return getLocalFraisWithTeam();
+      }
+    } else {
+      return getLocalFraisWithTeam();
+    }
+  };
+
+  const addFrais = async (fraisRecord) => {
+    const localFrais = getLocalData('frais');
+    const newRecord = {
+      id: fraisRecord.id || ('frs-' + Date.now()),
+      type: fraisRecord.type, // 'in' or 'out'
+      category: fraisRecord.category, // 'gasoil', 'adblue', 'masarif_chakhsiya', 'caisse_in', 'divers'
+      amount: parseFloat(fraisRecord.amount) || 0,
+      description: fraisRecord.description || '',
+      employee_id: fraisRecord.employee_id || null,
+      created_at: fraisRecord.created_at || new Date().toISOString()
+    };
+
+    localFrais.push(newRecord);
+    setLocalData('frais', localFrais);
+
+    if (useSupabase) {
+      try {
+        const { data, error } = await supabase
+          .from('frais')
+          .insert([newRecord])
+          .select('*, team_members(full_name)');
+        if (error) {
+          if (error.code === '42P01') {
+            console.warn('Supabase "frais" table not found during insert. Saved locally only.');
+            return {
+              ...newRecord,
+              team_members: fraisRecord.team_members || null
+            };
+          }
+          throw error;
+        }
+        return data && data.length > 0 ? data[0] : newRecord;
+      } catch (err) {
+        console.error('Failed to insert into Supabase table "frais":', err);
+      }
+    }
+    
+    // local fallback return with team member info mapped
+    const team = getLocalData('team_members');
+    const member = team.find(t => t.id === newRecord.employee_id);
+    return {
+      ...newRecord,
+      team_members: member ? { full_name: member.full_name } : null
+    };
+  };
+
+  const deleteFrais = async (id) => {
+    const localFrais = getLocalData('frais');
+    const filtered = localFrais.filter(f => f.id !== id);
+    setLocalData('frais', filtered);
+
+    if (useSupabase) {
+      try {
+        const { error } = await supabase
+          .from('frais')
+          .delete()
+          .eq('id', id);
+        if (error) {
+          if (error.code === '42P01') {
+            console.warn('Supabase "frais" table not found during delete. Deleted locally.');
+            return true;
+          }
+          throw error;
+        }
+      } catch (err) {
+        console.error('Failed to delete from Supabase table "frais":', err);
+      }
+    }
+    return true;
+  };
+
   const uploadToCloudinary = async (base64Data) => {
     if (!base64Data) return null;
     if (base64Data.startsWith('http://') || base64Data.startsWith('https://')) {
@@ -1320,6 +1427,9 @@ const DB = (() => {
     getCentralStock,
     getSellerStock,
     addStockTransfer,
-    uploadToCloudinary
+    uploadToCloudinary,
+    getFrais,
+    addFrais,
+    deleteFrais
   };
 })();
