@@ -1233,10 +1233,17 @@ body:has(#view-auth.active) .app-container {
   }
 
   .dashboard-grid {
-    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
-  .dashboard-grid > .glass-panel {
-    grid-column: span 1 !important;
+  #dashboard-map-card {
+    order: 1 !important;
+  }
+  #dashboard-chart-card {
+    order: 2 !important;
+  }
+  #dashboard-recent-sales-card {
+    order: 3 !important;
   }
 }
 
@@ -1262,12 +1269,6 @@ body:has(#view-auth.active) .app-container {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-grid {
-    grid-template-columns: 1fr !important;
-  }
-  .dashboard-grid > .glass-panel {
-    grid-column: span 1 !important;
-  }
 }
 
 /* Visibility rules */

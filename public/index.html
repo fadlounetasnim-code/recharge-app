@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="/css/style.css?v=1.0.17">
+  <link rel="stylesheet" href="/css/style.css?v=1.0.18">
   
   <!-- CDN Dependencies -->
   <!-- Supabase -->
@@ -286,7 +286,7 @@
 
         <!-- Dashboard Grid with Chart & Recent Table -->
         <div class="dashboard-grid" style="margin-top: 24px;">
-          <div class="glass-panel" style="grid-column: span 1;">
+          <div id="dashboard-chart-card" class="glass-panel" style="grid-column: span 1;">
             <div class="panel-header">
               <h3 data-i18n="chart_sales_title">Évolution journalière des ventes (Net & Remises)</h3>
             </div>
@@ -296,7 +296,7 @@
           </div>
 
           <!-- Customer Location Map Panel -->
-          <div class="glass-panel" style="grid-column: span 1;">
+          <div id="dashboard-map-card" class="glass-panel" style="grid-column: span 1;">
             <div class="panel-header">
               <h3 data-i18n="dashboard_map_title">Localisation des clients</h3>
             </div>
@@ -304,7 +304,7 @@
           </div>
 
           
-          <div class="glass-panel" style="grid-column: span 2;">
+          <div id="dashboard-recent-sales-card" class="glass-panel" style="grid-column: span 2;">
             <div class="panel-header">
               <h3 data-i18n="recent_sales_title">Dernières ventes enregistrées</h3>
               <button class="btn btn-outline btn-sm" onclick="navigateTo('sales')" data-i18n="btn_view_all">Voir tout</button>
@@ -1902,12 +1902,12 @@
   </style>
 
   <!-- Load JS Services -->
-  <script src="/js/db.js?v=1.0.17"></script>
-  <script src="/js/auth.js?v=1.0.17"></script>
-  <script src="/js/pdf.js?v=1.0.17"></script>
-  <script src="/js/qr.js?v=1.0.17"></script>
-  <script src="/js/ui.js?v=1.0.17"></script>
-  <script src="/js/app.js?v=1.0.17"></script>
+  <script src="/js/db.js?v=1.0.18"></script>
+  <script src="/js/auth.js?v=1.0.18"></script>
+  <script src="/js/pdf.js?v=1.0.18"></script>
+  <script src="/js/qr.js?v=1.0.18"></script>
+  <script src="/js/ui.js?v=1.0.18"></script>
+  <script src="/js/app.js?v=1.0.18"></script>
 
   <!-- Service Worker PWA Registration -->
   <script>
