@@ -1,4 +1,4 @@
-const CACHE_NAME = 'recharge-sim-cache-v20';
+const CACHE_NAME = 'recharge-sim-cache-v21';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

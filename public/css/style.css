@@ -1265,6 +1265,9 @@ body:has(#view-auth.active) .app-container {
   .dashboard-grid {
     grid-template-columns: 1fr !important;
   }
+  .dashboard-grid > .glass-panel {
+    grid-column: span 1 !important;
+  }
 }
 
 /* Visibility rules */
