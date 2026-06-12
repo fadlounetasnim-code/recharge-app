@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Main Stylesheet -->
-  <link rel="stylesheet" href="/css/style.css?v=1.0.12">
+  <link rel="stylesheet" href="/css/style.css?v=1.0.13">
   
   <!-- CDN Dependencies -->
   <!-- Supabase -->
@@ -1724,12 +1724,12 @@
   </style>
 
   <!-- Load JS Services -->
-  <script src="/js/db.js?v=1.0.12"></script>
-  <script src="/js/auth.js?v=1.0.12"></script>
-  <script src="/js/pdf.js?v=1.0.12"></script>
-  <script src="/js/qr.js?v=1.0.12"></script>
-  <script src="/js/ui.js?v=1.0.12"></script>
-  <script src="/js/app.js?v=1.0.12"></script>
+  <script src="/js/db.js?v=1.0.13"></script>
+  <script src="/js/auth.js?v=1.0.13"></script>
+  <script src="/js/pdf.js?v=1.0.13"></script>
+  <script src="/js/qr.js?v=1.0.13"></script>
+  <script src="/js/ui.js?v=1.0.13"></script>
+  <script src="/js/app.js?v=1.0.13"></script>
 
   <!-- Service Worker PWA Registration -->
   <script>
@@ -1756,6 +1756,40 @@
           .catch(err => console.error('Service Worker registration failed:', err));
       });
     }
+  </script>
+  <!-- Layout Debug Overlay -->
+  <div id="layout-debug-overlay" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.95); color: #00ff00; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; z-index: 99999; max-width: 400px; pointer-events: none; line-height: 1.4; border: 2px solid #00ff00; box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);">
+    Loading layout debug...
+  </div>
+  <script>
+    function updateLayoutDebug() {
+      const debugEl = document.getElementById('layout-debug-overlay');
+      if (!debugEl) return;
+      
+      const getStyle = (el, prop) => el ? window.getComputedStyle(el)[prop] : 'N/A';
+      const getMetrics = (el) => el ? `${el.offsetWidth}x${el.offsetHeight} (top:${el.offsetTop}, left:${el.offsetLeft})` : 'N/A';
+      
+      const appView = document.getElementById('app-view');
+      const header = document.querySelector('.global-header');
+      const sidebar = document.querySelector('.sidebar');
+      const mainContent = document.querySelector('.main-content');
+      const activeView = document.querySelector('.view.active');
+      
+      debugEl.innerHTML = `
+        <b>Layout Debug Info</b><br>
+        Viewport: ${window.innerWidth}x${window.innerHeight}<br>
+        AppView: ${getMetrics(appView)} display:${getStyle(appView, 'display')}<br>
+        GridRows: ${getStyle(appView, 'gridTemplateRows')}<br>
+        GridCols: ${getStyle(appView, 'gridTemplateColumns')}<br>
+        Header: ${getMetrics(header)} display:${getStyle(header, 'display')}<br>
+        Sidebar: ${getMetrics(sidebar)} display:${getStyle(sidebar, 'display')}<br>
+        MainContent: ${getMetrics(mainContent)} display:${getStyle(mainContent, 'display')}<br>
+        ActiveView: ${activeView ? activeView.id : 'None'} ${getMetrics(activeView)} display:${getStyle(activeView, 'display')}
+      `;
+    }
+    // Update every second
+    setInterval(updateLayoutDebug, 1000);
+    window.addEventListener('load', updateLayoutDebug);
   </script>
 </body>
 </html>
